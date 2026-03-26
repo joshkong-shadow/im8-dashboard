@@ -367,17 +367,18 @@ function Dashboard(){
     try{
       // Fetch campaign-level insights
       const campData=await fetchInsights(config.token,config.accountId,'campaign',d1,d2);
-      const campParsed=campData.map(r=>({
-        name: labelCampaign(r.campaign_name),
+      // Only include campaigns tagged _MT
+      const campParsed=campData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>({
+        name: r.campaign_name,
         rawName: r.campaign_name,
         day: r.date_start,
         ...parseMetaRow(r),
       })).map(r=>({...r,rev:r.revenue,purch:r.purchases}));
       setCampRaw(campParsed);
 
-      // Fetch adset-level insights
+      // Fetch adset-level insights — only include adsets tagged _ALT
       const adsetData=await fetchInsights(config.token,config.accountId,'adset',d1,d2);
-      const adsetParsed=adsetData.map(r=>{
+      const adsetParsed=adsetData.filter(r=>/_ALT/.test(r.adset_name)).map(r=>{
         const parsed=parseMetaRow(r);
         return{
           name: r.adset_name||'Unknown',
