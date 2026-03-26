@@ -291,53 +291,62 @@ function Dashboard(){
     setEditingNote(null);
   },[notes]);
 
-  // Load default overrides from repo on first visit (merge under localStorage)
+  // Load default overrides + notes from repo on first visit
   useEffect(()=>{
     DEFAULT_OVERRIDES_PROMISE.then(defaults=>{
       if(defaults&&Object.keys(defaults).length>0){
-        const local=LS.get('overrides',null);
-        if(local===null){
-          // First visit: use repo defaults as baseline
-          setOv(defaults);
-          LS.set('overrides',defaults);
+        // Support both formats: {overrides,notes} or plain overrides object
+        const defOv=defaults.overrides||defaults;
+        const defNotes=defaults.notes||{};
+        if(LS.get('overrides',null)===null){
+          setOv(defOv);LS.set('overrides',defOv);
+        }
+        if(LS.get('notes',null)===null&&Object.keys(defNotes).length>0){
+          setNotes(defNotes);LS.set('notes',defNotes);
         }
       }
       setDefaultsLoaded(true);
     });
   },[]);
 
-  // Export overrides + notes as JSON file
-  const exportOverrides=useCallback(()=>{
-    const blob=new Blob([JSON.stringify({overrides:ov,notes},null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;a.download='im8-overrides.json';a.click();
-    URL.revokeObjectURL(url);
+  // Publish overrides + notes to GitHub repo
+  const[publishing,setPublishing]=useState(false);
+  const[publishMsg,setPublishMsg]=useState('');
+  const publishToGithub=useCallback(async()=>{
+    let ghToken=LS.get('gh_token','');
+    if(!ghToken){
+      ghToken=prompt('Enter a GitHub Personal Access Token with repo scope.\nThis is stored in your browser only and never shared.');
+      if(!ghToken)return;
+      LS.set('gh_token',ghToken);
+    }
+    setPublishing(true);setPublishMsg('');
+    try{
+      const content=JSON.stringify({overrides:ov,notes},null,2);
+      const encoded=btoa(unescape(encodeURIComponent(content)));
+      // Get current file SHA (needed for update)
+      const getResp=await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/contents/default-overrides.json',{
+        headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json'}
+      });
+      const getCurrent=getResp.ok?await getResp.json():null;
+      const sha=getCurrent?.sha||undefined;
+      // Push update
+      const body={message:'Update overrides + notes from dashboard',content:encoded};
+      if(sha)body.sha=sha;
+      const putResp=await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/contents/default-overrides.json',{
+        method:'PUT',
+        headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+        body:JSON.stringify(body)
+      });
+      if(!putResp.ok){
+        const err=await putResp.json().catch(()=>({}));
+        if(putResp.status===401||putResp.status===403){LS.set('gh_token','');throw new Error('Invalid token — cleared. Try again.');}
+        throw new Error(err.message||'GitHub API error '+putResp.status);
+      }
+      setPublishMsg('Published!');
+      setTimeout(()=>setPublishMsg(''),3000);
+    }catch(e){setPublishMsg('Error: '+e.message);}
+    setPublishing(false);
   },[ov,notes]);
-
-  // Import overrides + notes from JSON file
-  const importOverrides=useCallback(()=>{
-    const input=document.createElement('input');
-    input.type='file';input.accept='.json';
-    input.onchange=e=>{
-      const file=e.target.files[0];if(!file)return;
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        try{
-          const imported=JSON.parse(ev.target.result);
-          // Support both old format (plain overrides) and new format ({overrides, notes})
-          if(imported.overrides){
-            setOv(imported.overrides);LS.set('overrides',imported.overrides);
-            if(imported.notes){setNotes(imported.notes);LS.set('notes',imported.notes);}
-          }else{
-            setOv(imported);LS.set('overrides',imported);
-          }
-        }catch(err){alert('Invalid JSON file');}
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  },[]);
   const[campRaw,setCampRaw]=useState([]);
   const[adsetRaw,setAdsetRaw]=useState([]);
   const[loading,setLoading]=useState(false);
@@ -475,8 +484,8 @@ function Dashboard(){
         React.createElement('span',{style:{color:'#475569',fontSize:12}},'vs'),
         React.createElement('input',{type:'date',value:d2,onChange:e=>setD2(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}}),
         React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
-        React.createElement('button',{onClick:exportOverrides,title:'Export overrides',style:{...S.btn(false),padding:'5px 10px',fontSize:11}},'\u2B07 Export'),
-        React.createElement('button',{onClick:importOverrides,title:'Import overrides',style:{...S.btn(false),padding:'5px 10px',fontSize:11}},'\u2B06 Import'),
+        React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
+        publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
         React.createElement('button',{onClick:()=>{LS.set('config',null);setConfig(null);},style:{...S.btn(false),padding:'5px 10px',fontSize:11}},'\u2699')
       )
     ),
