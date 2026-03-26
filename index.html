@@ -164,7 +164,7 @@ function labelCampaign(c){
   if(/VID#6/.test(c))return'Danny Interview Videos (VID#6)';
   if(/IMG#34/.test(c))return'Image Creatives (IMG#34)';
   if(/ACH/.test(c))return'ACH Project Creatives';
-  return c.substring(0,50);
+  return c;
 }
 
 // ═══ AGGREGATE ══════════════════════════════════════════════════════════════
@@ -279,7 +279,17 @@ function Dashboard(){
   const[config,setConfig]=useState(()=>LS.get('config',null));
   const[tab,setTab]=useState("campaigns");
   const[ov,setOv]=useState(()=>LS.get('overrides',{}));
+  const[notes,setNotes]=useState(()=>LS.get('notes',{}));
+  const[editingNote,setEditingNote]=useState(null);
   const[defaultsLoaded,setDefaultsLoaded]=useState(false);
+
+  // Save a description note for a campaign/angle/lander
+  const saveNote=useCallback((key,text)=>{
+    const nx={...notes};
+    if(text.trim())nx[key]=text.trim();else delete nx[key];
+    setNotes(nx);LS.set('notes',nx);
+    setEditingNote(null);
+  },[notes]);
 
   // Load default overrides from repo on first visit (merge under localStorage)
   useEffect(()=>{
@@ -296,16 +306,16 @@ function Dashboard(){
     });
   },[]);
 
-  // Export overrides as JSON file
+  // Export overrides + notes as JSON file
   const exportOverrides=useCallback(()=>{
-    const blob=new Blob([JSON.stringify(ov,null,2)],{type:'application/json'});
+    const blob=new Blob([JSON.stringify({overrides:ov,notes},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;a.download='im8-overrides.json';a.click();
     URL.revokeObjectURL(url);
-  },[ov]);
+  },[ov,notes]);
 
-  // Import overrides from JSON file
+  // Import overrides + notes from JSON file
   const importOverrides=useCallback(()=>{
     const input=document.createElement('input');
     input.type='file';input.accept='.json';
@@ -315,7 +325,13 @@ function Dashboard(){
       reader.onload=ev=>{
         try{
           const imported=JSON.parse(ev.target.result);
-          setOv(imported);LS.set('overrides',imported);
+          // Support both old format (plain overrides) and new format ({overrides, notes})
+          if(imported.overrides){
+            setOv(imported.overrides);LS.set('overrides',imported.overrides);
+            if(imported.notes){setNotes(imported.notes);LS.set('notes',imported.notes);}
+          }else{
+            setOv(imported);LS.set('overrides',imported);
+          }
         }catch(err){alert('Invalid JSON file');}
       };
       reader.readAsText(file);
@@ -432,7 +448,7 @@ function Dashboard(){
   const d2Label = new Date(d2+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const d1Label = new Date(d1+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
-  return React.createElement('div',{style:{padding:'20px 16px',maxWidth:1060,margin:'0 auto'}},
+  return React.createElement('div',{style:{padding:'20px 16px',maxWidth:1200,margin:'0 auto'}},
     // Header
     React.createElement('div',{style:{marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}},
       React.createElement('div',null,
@@ -489,6 +505,7 @@ function Dashboard(){
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
         React.createElement('thead',null,React.createElement('tr',null,
           React.createElement('th',{style:{...S.th,minWidth:170}},tab==='campaigns'?'Campaign':tab==='angles'?'Angle / Persona':'Landing Page'),
+          React.createElement('th',{style:{...S.th,minWidth:120}},'Description'),
           React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
           React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
           React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
@@ -499,9 +516,23 @@ function Dashboard(){
         )),
         React.createElement('tbody',null,data.map((r,i)=>
           React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
-            React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:220}},
-              React.createElement('div',null,r.n),
+            React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:280}},
+              React.createElement('div',{style:{wordBreak:'break-word'}},r.n),
               r.cnt!=null&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.cnt+' adset'+(r.cnt!==1?'s':''))
+            ),
+            React.createElement('td',{style:{...S.td,minWidth:120,maxWidth:200}},
+              editingNote===r.n
+                ? React.createElement('input',{
+                    autoFocus:true,
+                    defaultValue:notes[r.n]||'',
+                    onBlur:e=>saveNote(r.n,e.target.value),
+                    onKeyDown:e=>{if(e.key==='Enter')saveNote(r.n,e.target.value);if(e.key==='Escape')setEditingNote(null);},
+                    style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontSize:11,width:'100%',outline:'none'}
+                  })
+                : React.createElement('div',{
+                    onClick:()=>setEditingNote(r.n),
+                    style:{cursor:'pointer',fontSize:11,color:notes[r.n]?'#94a3b8':'#334155',minHeight:20,padding:'2px 0',wordBreak:'break-word'}
+                  },notes[r.n]||'Click to add...')
             ),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,format:'$'})),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,format:'n'})),
