@@ -366,6 +366,8 @@ function Dashboard(){
   const[error,setError]=useState('');
   const[ep,setEp]=useState(null);
   const[campDrill,setCampDrill]=useState(null);
+  const[drillDown,setDrillDown]=useState(null); // {type:'angle'|'lander', name:'...'}
+
   const[bn,setBn]=useState('');
   const[fms,setFms]=useState(0);
   const[fr,setFr]=useState('all');
@@ -460,15 +462,22 @@ function Dashboard(){
   // Campaign drill-down: adsets belonging to clicked campaign
   const campDrillData=useMemo(()=>{
     if(!campDrill)return[];
-    // Match adsets whose campaign name matches the clicked campaign's rawName
     const matchingRaw=campRaw.filter(r=>r.name===campDrill);
     const rawNames=new Set(matchingRaw.map(r=>r.rawName));
     const matchingAdsets=adsetRaw.filter(r=>rawNames.has(r.campaign));
-    // Aggregate per adset
     const g={};
     for(const a of matchingAdsets){const k=a.name;if(!g[k])g[k]=[];g[k].push(a);}
     return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2)})).sort((a,b)=>b.tot.s-a.tot.s);
   },[campDrill,campRaw,adsetRaw,d1,d2]);
+
+  // Angle/Lander drill-down: adsets belonging to clicked angle or lander
+  const drillDownData=useMemo(()=>{
+    if(!drillDown)return[];
+    const matching=ads.filter(a=>drillDown.type==='angle'?a.angle===drillDown.name:a.lander===drillDown.name);
+    const g={};
+    for(const a of matching){const k=a.name;if(!g[k])g[k]=[];g[k].push(a);}
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2)})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[drillDown,ads,d1,d2]);
 
   const fl=d=>d.filter(r=>{if(r.tot.s<fms)return false;if(fr==="above"&&r.tot.roas<1)return false;if(fr==="below"&&r.tot.roas>=1)return false;if(fr==="watch"&&(r.tot.roas<0.7||r.tot.roas>=1))return false;return true;});
 
@@ -555,7 +564,10 @@ function Dashboard(){
           React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
             React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
             React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:280}},
-              React.createElement('div',{style:{wordBreak:'break-word',cursor:tab==='campaigns'?'pointer':'default',textDecoration:tab==='campaigns'?'underline':'none',textDecorationColor:'#334155',textUnderlineOffset:2},onClick:()=>{if(tab==='campaigns')setCampDrill(campDrill===r.n?null:r.n);}},r.n),
+              React.createElement('div',{style:{wordBreak:'break-word',cursor:'pointer',textDecoration:'underline',textDecorationColor:'#334155',textUnderlineOffset:2},onClick:()=>{
+                if(tab==='campaigns'){setCampDrill(campDrill===r.n?null:r.n);setDrillDown(null);}
+                else{setDrillDown(drillDown&&drillDown.name===r.n?null:{type:tab==='angles'?'angle':'lander',name:r.n});setCampDrill(null);}
+              }},r.n),
               r.cnt!=null&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.cnt+' adset'+(r.cnt!==1?'s':''))
             ),
             React.createElement('td',{style:{...S.td,minWidth:120,maxWidth:200}},
@@ -606,6 +618,41 @@ function Dashboard(){
               )),
               React.createElement('tbody',null,campDrillData.map((a,i)=>
                 React.createElement('tr',{key:a.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                  React.createElement('td',{style:{...S.td,fontSize:11,color:'#e2e8f0',wordBreak:'break-word',maxWidth:200,lineHeight:1.3}},a.n),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.s,prev:a.d1?.s,format:'$'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:a.d2?.roas,prev:a.d1?.roas,format:'x',isRoas:true})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.p,prev:a.d1?.p,format:'n'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.cpa,prev:a.d1?.cpa,format:'$',invert:true}))
+                )
+              ))
+            )
+      )
+    ),
+
+    // Angle/Lander drill-down panel
+    drillDown&&React.createElement('div',{style:{position:'fixed',top:0,right:0,width:520,height:'100vh',background:'#0c1220',borderLeft:'2px solid #1e293b',zIndex:100,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'},className:'fade-in'},
+      React.createElement('div',{style:{padding:'16px 20px',borderBottom:'1px solid #1e293b',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},drillDown.name),
+          React.createElement('div',{style:{fontSize:11,color:'#64748b',marginTop:4}},drillDownData.length+' adset'+(drillDownData.length!==1?'s':''))
+        ),
+        React.createElement('button',{onClick:()=>setDrillDown(null),style:{background:'#1e293b',border:'none',color:'#94a3b8',borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0,marginLeft:12}},'Close')
+      ),
+      React.createElement('div',{style:{flex:1,overflowY:'auto',padding:0}},
+        drillDownData.length===0
+          ? React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12}},'No adsets found.')
+          : React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
+              React.createElement('thead',null,React.createElement('tr',null,
+                React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+                React.createElement('th',{style:{...S.th,minWidth:140}},'Adset'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+                React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA')
+              )),
+              React.createElement('tbody',null,drillDownData.map((a,i)=>
+                React.createElement('tr',{key:a.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                  React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
                   React.createElement('td',{style:{...S.td,fontSize:11,color:'#e2e8f0',wordBreak:'break-word',maxWidth:200,lineHeight:1.3}},a.n),
                   React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.s,prev:a.d1?.s,format:'$'})),
                   React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:a.d2?.roas,prev:a.d1?.roas,format:'x',isRoas:true})),
