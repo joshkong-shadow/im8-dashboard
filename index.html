@@ -233,8 +233,9 @@ function AdsetEditor({name,currentCat,options,type,overrides,onSave}){
 
 // ═══ SETTINGS SCREEN ════════════════════════════════════════════════════════
 function Settings({onSave,initial}){
-  const[token,setToken]=useState(initial.token||'');
-  const[accountId,setAccountId]=useState(initial.accountId||'');
+  const cfg=initial||{};
+  const[token,setToken]=useState(cfg.token||'');
+  const[accountId,setAccountId]=useState(cfg.accountId||'');
   const[testing,setTesting]=useState(false);
   const[error,setError]=useState('');
   const[success,setSuccess]=useState(false);
