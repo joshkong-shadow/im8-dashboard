@@ -541,7 +541,7 @@ function Dashboard(){
         )),
         React.createElement('tbody',null,data.map((r,i)=>
           React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
-            React.createElement('td',{style:{...S.td,textAlign:'center',color:'#475569',fontSize:11,...S.mono}},(i+1)),
+            React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
             React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:280}},
               React.createElement('div',{style:{wordBreak:'break-word',cursor:tab==='campaigns'?'pointer':'default',textDecoration:tab==='campaigns'?'underline':'none',textDecorationColor:'#334155',textUnderlineOffset:2},onClick:()=>{if(tab==='campaigns')setCampDrill(campDrill===r.n?null:r.n);}},r.n),
               r.cnt!=null&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.cnt+' adset'+(r.cnt!==1?'s':''))
