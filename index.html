@@ -553,11 +553,11 @@ function Dashboard(){
                     defaultValue:notes[r.n]||'',
                     onBlur:e=>saveNote(r.n,e.target.value),
                     onKeyDown:e=>{if(e.key==='Enter')saveNote(r.n,e.target.value);if(e.key==='Escape')setEditingNote(null);},
-                    style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontSize:13,fontWeight:700,width:'100%',outline:'none'}
+                    style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontWeight:700,width:'100%',outline:'none'}
                   })
                 : React.createElement('div',{
                     onClick:()=>setEditingNote(r.n),
-                    style:{cursor:'pointer',fontSize:13,fontWeight:700,color:notes[r.n]?'#e2e8f0':'#334155',minHeight:20,padding:'2px 0',wordBreak:'break-word'}
+                    style:{cursor:'pointer',fontWeight:700,color:notes[r.n]?'#e2e8f0':'#334155',minHeight:20,padding:'2px 0',wordBreak:'break-word'}
                   },notes[r.n]||'Click to add...')
             ),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,format:'$'})),
