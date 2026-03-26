@@ -191,20 +191,32 @@ const S = {
 // ═══ DOD CELL ═══════════════════════════════════════════════════════════════
 function DoDCell({cur,prev,format,invert,isRoas}){
   const f=v=>{if(v==null)return"\u2014";if(format==="$")return"$"+Math.round(v).toLocaleString();if(format==="%")return v.toFixed(1)+"%";if(format==="cvr")return v.toFixed(2)+"%";if(format==="x")return v.toFixed(2)+"x";if(format==="n")return Math.round(v).toLocaleString();return String(v);};
-  let cc="#cbd5e1";
-  if(cur!=null&&prev!=null){const d=cur-prev,t=format==="x"?0.03:format==="$"?3:0.2;if(Math.abs(d)>t)cc=invert?(d<0?"#34d399":"#f87171"):(d>0?"#34d399":"#f87171");}
+  const sz={fontSize:13,fontWeight:600,...S.mono};
+
+  // Determine arrow for non-ROAS cells
+  let arrow=null;
+  if(!isRoas&&cur!=null&&prev!=null){
+    const d=cur-prev;
+    const t=format==="$"?3:0.2;
+    if(Math.abs(d)>t){
+      const good=invert?d<0:d>0;
+      arrow=React.createElement('span',{style:{marginLeft:4,fontSize:13}},good?'\u2191':'\u2193');
+      // Color only the arrow
+      arrow=React.createElement('span',{style:{marginLeft:4,fontSize:13,color:good?'#34d399':'#f87171'}},good?'\u2191':'\u2193');
+    }
+  }
+
   if(isRoas&&cur!=null){
-    const bg=cur>=1.5?"#06261a":cur>=1.0?"#14260a":cur>=0.7?"#26230a":"#260a0a";
-    let dc=cur>=1.5?"#34d399":cur>=1.0?"#a3e635":cur>=0.7?"#fbbf24":"#f87171";
-    if(prev!=null&&Math.abs(cur-prev)>0.03)dc=cur>prev?"#34d399":"#f87171";
+    const rc=cur>=1.0?'#34d399':cur>=0.8?'#fbbf24':'#f87171';
+    const bg=cur>=1.0?'#06261a':cur>=0.8?'#26230a':'#260a0a';
     return React.createElement('div',{style:{textAlign:'center'}},
-      React.createElement('div',{style:{background:bg,color:dc,padding:'2px 6px',borderRadius:3,fontSize:11,fontWeight:700,...S.mono,display:'inline-block',minWidth:48}},f(cur)),
-      prev!=null&&React.createElement('div',{style:{color:'#475569',fontSize:10,...S.mono,marginTop:1}},'('+f(prev)+')')
+      React.createElement('div',{style:{background:bg,color:rc,padding:'2px 6px',borderRadius:3,...sz,display:'inline-block',minWidth:48}},f(cur)),
+      prev!=null&&React.createElement('div',{style:{color:'#94a3b8',...sz,marginTop:2}},f(prev))
     );
   }
   return React.createElement('div',null,
-    React.createElement('div',{style:{color:cc,...S.mono,fontSize:12,fontWeight:600}},f(cur)),
-    prev!=null&&React.createElement('div',{style:{color:'#475569',fontSize:10,...S.mono}},'('+f(prev)+')')
+    React.createElement('div',{style:{color:'#e2e8f0',...sz}},f(cur),arrow),
+    prev!=null&&React.createElement('div',{style:{color:'#94a3b8',...sz,marginTop:2}},f(prev))
   );
 }
 
