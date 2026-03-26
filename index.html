@@ -487,7 +487,6 @@ function Dashboard(){
         React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
-        React.createElement('button',{onClick:()=>{LS.set('config',null);setConfig(null);},style:{...S.btn(false),padding:'5px 10px',fontSize:11}},'\u2699')
       )
     ),
 
