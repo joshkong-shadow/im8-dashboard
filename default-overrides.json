@@ -1,5 +1,100 @@
 {
-  "overrides": {},
+  "overrides": {
+    "260318 ANGLE 7: Gut Health _ALT*": {
+      "angle": "Gut Health",
+      "lander": "GETGUT Lander"
+    },
+    "260326 _PILL FATIGUE SIMPLIFIER_Pills lander_ALT*": {
+      "angle": "Supplement Stackers (Angle 6)",
+      "lander": "Pills"
+    },
+    "260326_GREEN POWDER SWITCHER_Greens lander_ALT*": {
+      "angle": "GreensPowder Switcher",
+      "lander": "Greens"
+    },
+    "260326 _IMMUNE WARRIOR_Immune lander_ALT*": {
+      "angle": "Immunity",
+      "lander": "Immunity"
+    },
+    "260326_SLEEP OPTIMIZER_Sleep lander_ALT*": {
+      "angle": "Sleep",
+      "lander": "Sleep"
+    },
+    "260326_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT*": {
+      "angle": "Weightloss",
+      "lander": "Weight"
+    },
+    "260326_YOUNG PROFESSIONAL_Young professional lander_ALT*": {
+      "angle": "Young Professionals",
+      "lander": "Young Professional"
+    },
+    "260326 _COGNITIVE PERFORMER_Focus Lander_ALT*": {
+      "angle": "Brain Health",
+      "lander": "Focus Lander"
+    },
+    "260326_ENERGY SEEKER_Energy Lander_ALT*": {
+      "angle": "Energy",
+      "lander": "Energy"
+    },
+    "260326_FITNESS ENTHUSIAST_Fitness lander_ALT*": {
+      "angle": "Fitness Enthusiasts",
+      "lander": "Fitness Lander"
+    },
+    "260306 ACTIVE SENIOR (>45)_ALT*": {
+      "lander": "Active Seniors"
+    },
+    "260306 GLP-1_ALT*": {
+      "lander": "GLP-1"
+    },
+    "260306 Menopause Warriors (>40F)_ALT*": {
+      "lander": "Menopause"
+    },
+    "260309 Collagen Restorer ICP_ALT*": {
+      "lander": "Hair, Skin & Nails"
+    },
+    "260309 Menopause Warriors (>40F)_ALT*": {
+      "lander": "Menopause"
+    },
+    "260313 ANGLE 5: Supplement Skeptics(DRAMYSHAH#1-Most Vitamins Are Useless) _ALT*": {
+      "lander": "Dr Amy"
+    },
+    "260313 ANGLE 5: Supplement Skeptics(DRAMYSHAH#2-Why I Stopped Taking 12 Different Supplements) _ALT*": {
+      "lander": "Dr Amy"
+    },
+    "260313 ANGLE 8: Aging After 30  (Gave them back energy & clarity)_ALT*": {
+      "lander": "Feel Again Lander"
+    },
+    "260313 Collagen Restorer ICP_ALT*": {
+      "lander": "Hair, Skin & Nails"
+    },
+    "260313 ACTIVE SENIOR (>45)_ALT*": {
+      "lander": "Active Seniors"
+    },
+    "260313 ANGLE 4: Clinical Trial Results (Evidence that it works)_ALT*": {
+      "lander": "What's Missing"
+    },
+    "260313 ANGLE 3: Scientific Advancements (New Developments)_ALT*": {
+      "lander": "Science Lander"
+    },
+    "260317 ACTIVE SENIOR (>45)#2_ALT*": {
+      "lander": "Active Seniors"
+    },
+    "260313 ANGLE 2: Preventative Healthcare (Now is the time)_ALT*": {
+      "lander": "Act Now"
+    },
+    "260317 Collagen Restorer ICP#2_ALT*": {
+      "lander": "Hair, Skin & Nails"
+    },
+    "260317 GLP-1#2_ALT*": {
+      "lander": "GLP-1"
+    },
+    "260317 Menopause Warriors (>40F)#2_ALT*": {
+      "lander": "Menopause"
+    },
+    "260326_JOINT RECOVERY SEEKER_Joints lander_ALT*": {
+      "lander": "Joint Recovery"
+    }
+  },
   "notes": {
     "GLP-1 ICP": "GLP-1 Campaign",
     "GET PDP (Main Funnel)": "GET PDP",
@@ -12,14 +107,56 @@
     "L3 | 20260319_TOFU_CA/UK_SUPERSCALER_ASC_AUTO_IR_WINNERS_LC_MT*": "CA/UK Superscaler",
     "L3 | 20260319_TOFU_GLOBAL_ASC_AUTO_IR_GETPDP(CLPT)_MT* (Prenetics 1_1)": "GETPDP Migrated",
     "L3 | 20260319_TOFU_GLOBAL_ASCCBO_AUTO_IR_QUIZ(CLPT)_MT* (Prenetics 1_1)": "Quiz V1",
-    "L3 | 20260317_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE5,8)_MT*": "Persona Testing",
+    "L3 | 20260317_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE5,8)_MT*": "Aging After 30 + Supp Skeptics",
     "L3 | 20260319_TOFU_GLOBAL_CBO_AUTO_7Dclick_IR_DRJAMES_LC_MT* (IM8-USD-01)": "DrJames",
     "L3 | 20260310_TOFU_GLOBAL_ASCCBO_AUTO_GETQUIZV2(NEW)(CLPT)_MT*": "Quiz V2",
     "L3 | 20260313_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP#2(SENIORS)_MT*": "Active Seniors",
-    "L3 | 20260318_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE6,7,9,10)_MT*": "Persona Testing",
+    "L3 | 20260318_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE6,7,9,10)_MT*": "Supp Stackers & Gut Health",
     "L1 | 20260319_TOFU_GLOBAL_CBO_AUTO_IR_EUCTR_MT* (Prenetics_MY_1)": "EU Localized",
     "L3 | 20260313_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP#2(COLLAGEN)_MT*": "Collagen",
-    "L3 | 20260316_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE2,3,4)_MT*": "Persona Testing",
-    "XX L3 | 20260316_TOFU_US_SUPERSCALER_ASC_AUTO_WINNERS_LC_MT*": "Legacy Campaign"
+    "L3 | 20260316_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE2,3,4)_MT*": "Science, Clinical Trials & Preventative Healthcare",
+    "XX L3 | 20260316_TOFU_US_SUPERSCALER_ASC_AUTO_WINNERS_LC_MT*": "Legacy Campaign",
+    "L3 | 20260313_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE1BIOAVAILABILITY)_MT*": "Us vs Other Supps",
+    "GLP-1": "X Reasons - /glp1",
+    "Menopause": "X Reasons - /menopause",
+    "Active Seniors": "X Reasons - /seniors",
+    "Health Condition Solution Seeker": "Health Conditions",
+    "Aging After 30 (Angle 8)": "Aging after 30",
+    "Collagen": "Hair, Skin & Nails",
+    "Supplement Skeptics (Angle 5)": "Supplement Skeptics",
+    "Supplement Stackers (Angle 6)": "Supplement Stackers",
+    "Bioavailability (Angle 1)": "Us vs Them",
+    "Scientific Advancements (Angle 3)": "Scientific Advancements",
+    "Recovery": "Recovery",
+    "Gut Health": "Gut Health",
+    "Preventative Healthcare (Angle 2)": "Preventative Healthcare",
+    "Clinical Trial Results (Angle 4)": "Clinical Proof",
+    "Sleep": "Persona - /for/sleep",
+    "Brain Health": "Brain health",
+    "Immunity": "Persona - /for/immune",
+    "Weightloss": "Weightloss",
+    "Energy": "Persona - /for/energy",
+    "Fitness Enthusiasts": "Fitness Enthusiasts",
+    "Young Professionals": "Young Professionals",
+    "GreensPowder Switcher": "Greens Powder Switchers",
+    "Why IM8 Lander": "X Reasons - /why-im8",
+    "Feel Again Lander": "X Reasons - /feel-again",
+    "Hair, Skin & Nails": "X Reasons - /skin-health",
+    "Dr Amy": "Ambassador - /AmyShah",
+    "No BS Lander": "X Reasons - /no-bs",
+    "Science Lander": "X Reasons - /science",
+    "Proof Lander": "X Reasons - /proof",
+    "Pro Upgrade LDP": "X Reasons - /pro-upgrade",
+    "GETGUT Lander": "Persona - /for/gut",
+    "Focus Lander": "Persona - /for/focus",
+    "Joint Recovery": "Persona - /for/joints",
+    "Weight": "Persona - /for/weight",
+    "Pills": "Persona - /for/pills",
+    "BKM Formula Lander": "X Reasons - /beckham-formula",
+    "Act Now": "X Reasons - /act-now",
+    "What's Missing": "X Reasons - /whats-missing",
+    "Fitness Lander": "Persona - /for/fitness",
+    "Young Professional": "Persona - /for/young-professional",
+    "Greens": "Persona - /for/greens"
   }
 }
