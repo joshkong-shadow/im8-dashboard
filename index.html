@@ -293,7 +293,9 @@ function Dashboard(){
   const[tab,setTab]=useState("campaigns");
   const[ov,setOv]=useState(()=>LS.get('overrides',{}));
   const[notes,setNotes]=useState(()=>LS.get('notes',{}));
+  const[buckets,setBuckets]=useState(()=>LS.get('buckets',{})); // lander name -> bucket name
   const[editingNote,setEditingNote]=useState(null);
+  const[editingBucket,setEditingBucket]=useState(null);
   const[defaultsLoaded,setDefaultsLoaded]=useState(false);
 
   // Save a description note for a campaign/angle/lander
@@ -303,6 +305,14 @@ function Dashboard(){
     setNotes(nx);LS.set('notes',nx);
     setEditingNote(null);
   },[notes]);
+
+  // Save a bucket assignment for a lander
+  const saveBucket=useCallback((lander,bucket)=>{
+    const nx={...buckets};
+    if(bucket.trim())nx[lander]=bucket.trim();else delete nx[lander];
+    setBuckets(nx);LS.set('buckets',nx);
+    setEditingBucket(null);
+  },[buckets]);
 
   // Load default overrides + notes from repo on first visit
   useEffect(()=>{
@@ -316,6 +326,10 @@ function Dashboard(){
         }
         if(LS.get('notes',null)===null&&Object.keys(defNotes).length>0){
           setNotes(defNotes);LS.set('notes',defNotes);
+        }
+        const defBuckets=defaults.buckets||{};
+        if(LS.get('buckets',null)===null&&Object.keys(defBuckets).length>0){
+          setBuckets(defBuckets);LS.set('buckets',defBuckets);
         }
       }
       setDefaultsLoaded(true);
@@ -334,7 +348,7 @@ function Dashboard(){
     }
     setPublishing(true);setPublishMsg('');
     try{
-      const content=JSON.stringify({overrides:ov,notes},null,2);
+      const content=JSON.stringify({overrides:ov,notes,buckets},null,2);
       const encoded=btoa(unescape(encodeURIComponent(content)));
       // Get current file SHA (needed for update)
       const getResp=await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/contents/default-overrides.json',{
@@ -359,7 +373,7 @@ function Dashboard(){
       setTimeout(()=>setPublishMsg(''),3000);
     }catch(e){setPublishMsg('Error: '+e.message);}
     setPublishing(false);
-  },[ov,notes]);
+  },[ov,notes,buckets]);
   const[campRaw,setCampRaw]=useState([]);
   const[adsetRaw,setAdsetRaw]=useState([]);
   const[loading,setLoading]=useState(false);
@@ -453,6 +467,15 @@ function Dashboard(){
   };
   const angD=useMemo(()=>grp("angle"),[ads,d1,d2]);
   const lnD=useMemo(()=>grp("lander"),[ads,d1,d2]);
+
+  // Bucket aggregation — group landers into buckets
+  const bucketD=useMemo(()=>{
+    // Each adset gets its lander's bucket assignment
+    const bucketedAds=ads.map(a=>({...a,bucket:buckets[a.lander]||'Unassigned'}));
+    const g={};
+    for(const a of bucketedAds){const k=a.bucket;if(!g[k])g[k]=[];g[k].push(a);}
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2),landerCount:new Set(rows.map(r=>r.lander)).size})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[ads,buckets,d1,d2]);
 
   // Campaign aggregation — count adsets from adsetRaw
   const campAdsetCounts=useMemo(()=>{
@@ -564,6 +587,39 @@ function Dashboard(){
       'Fetching data from Meta...'
     ),
 
+    // Bucket summary (Landing Pages tab only)
+    tab==='landers'&&bucketD.length>0&&React.createElement('div',{style:{marginBottom:16}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#94a3b8',marginBottom:8,textTransform:'uppercase',letterSpacing:'0.5px'}},'Bucket Summary'),
+      React.createElement('div',{style:{overflowX:'auto'}},
+        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+          React.createElement('thead',null,React.createElement('tr',null,
+            React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+            React.createElement('th',{style:{...S.th,minWidth:140}},'Bucket'),
+            React.createElement('th',{style:{...S.th,textAlign:'right'}},'Landers'),
+            React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+            React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+            React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+            React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+            React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+            React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
+          )),
+          React.createElement('tbody',null,bucketD.map((b,i)=>
+            React.createElement('tr',{key:b.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+              React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
+              React.createElement('td',{style:{...S.td,fontWeight:700,color:'#e2e8f0'}},b.n),
+              React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',fontSize:12}},b.landerCount),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.s,prev:b.d1?.s,format:'$'})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.p,prev:b.d1?.p,format:'n'})),
+              React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:b.d2?.roas,prev:b.d1?.roas,format:'x',isRoas:true})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cpa,prev:b.d1?.cpa,format:'$',invert:true})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.atc,prev:b.d1?.atc,format:'%'})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cvr,prev:b.d1?.cvr,format:'cvr'}))
+            )
+          ))
+        )
+      )
+    ),
+
     // Table
     !loading||campRaw.length>0?React.createElement('div',{style:{overflowX:'auto'}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
@@ -577,6 +633,7 @@ function Dashboard(){
           React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
           React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
           React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%'),
+          tab==='landers'&&React.createElement('th',{style:{...S.th,minWidth:100}},'Bucket'),
           tab!=='campaigns'&&React.createElement('th',{style:{...S.th,textAlign:'center',width:36}})
         )),
         React.createElement('tbody',null,data.map((r,i)=>
@@ -611,6 +668,30 @@ function Dashboard(){
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cpa,prev:r.d1?.cpa,format:'$',invert:true})),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.atc,prev:r.d1?.atc,format:'%'})),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cvr,prev:r.d1?.cvr,format:'cvr'})),
+            tab==='landers'&&React.createElement('td',{style:{...S.td,minWidth:100}},(()=>{
+              const allBucketNames=[...new Set(Object.values(buckets))].sort();
+              const curBucket=buckets[r.n]||'';
+              return editingBucket===r.n
+                ? React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:4}},
+                    React.createElement('select',{value:curBucket,onChange:e=>{if(e.target.value==='__NEW__'){setEditingBucket(r.n+'__new');}else{saveBucket(r.n,e.target.value);}},style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontSize:11,outline:'none'}},
+                      React.createElement('option',{value:''},'Unassigned'),
+                      allBucketNames.map(b=>React.createElement('option',{key:b,value:b},b)),
+                      React.createElement('option',{value:'__NEW__'},'+ New bucket...')
+                    )
+                  )
+                : editingBucket===r.n+'__new'
+                ? React.createElement('input',{
+                    autoFocus:true,
+                    placeholder:'Bucket name...',
+                    onBlur:e=>saveBucket(r.n,e.target.value),
+                    onKeyDown:e=>{if(e.key==='Enter')saveBucket(r.n,e.target.value);if(e.key==='Escape')setEditingBucket(null);},
+                    style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontSize:11,width:'100%',outline:'none'}
+                  })
+                : React.createElement('div',{
+                    onClick:()=>setEditingBucket(r.n),
+                    style:{cursor:'pointer',fontSize:11,fontWeight:600,color:curBucket?'#3b82f6':'#334155',padding:'2px 0'}
+                  },curBucket||'Unassigned');
+            })()),
             tab!=='campaigns'&&React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement('button',{onClick:()=>{setEp({type:tab==='angles'?'angle':'lander',cat:r.n});setBn('');},style:{background:'#1e293b',border:'none',color:'#94a3b8',borderRadius:4,padding:'3px 7px',cursor:'pointer',fontSize:10,fontWeight:600}},'Edit'))
           )
         ))
