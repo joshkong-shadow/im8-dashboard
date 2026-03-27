@@ -389,9 +389,11 @@ function Dashboard(){
   const fetchData=useCallback(async()=>{
     if(!config)return;
     setLoading(true);setError('');
+    // Ensure dates are in correct order (since <= until)
+    const dateFrom=d1<=d2?d1:d2, dateTo=d1<=d2?d2:d1;
     try{
       // Fetch campaign-level insights
-      const campData=await fetchInsights(config.token,config.accountId,'campaign',d1,d2);
+      const campData=await fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo);
       // Only include campaigns tagged _MT
       const campParsed=campData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>({
         name: r.campaign_name,
@@ -402,7 +404,7 @@ function Dashboard(){
       setCampRaw(campParsed);
 
       // Fetch adset-level insights — only include adsets tagged _ALT
-      const adsetData=await fetchInsights(config.token,config.accountId,'adset',d1,d2);
+      const adsetData=await fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo);
       const adsetParsed=adsetData.filter(r=>/_ALT/.test(r.adset_name)).map(r=>{
         const parsed=parseMetaRow(r);
         return{
