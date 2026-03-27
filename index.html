@@ -136,8 +136,8 @@ const LANDER_RULES = [
   ["Feel Again Lander",/Feel again lander/i],["BKM Formula Lander",/BKM formula lander/i],
   ["Pro Upgrade LDP",/PROUPGRADELDP/i],
 ];
-function autoAngle(n){for(const[l,r]of ANGLE_RULES)if(r.test(n))return l;return"Untagged";}
-function autoLander(n){for(const[l,r]of LANDER_RULES)if(r.test(n))return l;return"Not specified in adset";}
+function autoAngle(n){return"Untagged";}
+function autoLander(n){return"Untagged";}
 
 // ═══ CAMPAIGN NAME LABELER ══════════════════════════════════════════════════
 function labelCampaign(c){
