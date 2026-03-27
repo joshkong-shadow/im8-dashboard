@@ -454,12 +454,23 @@ function Dashboard(){
   const angD=useMemo(()=>grp("angle"),[ads,d1,d2]);
   const lnD=useMemo(()=>grp("lander"),[ads,d1,d2]);
 
-  // Campaign aggregation
+  // Campaign aggregation — count adsets from adsetRaw
+  const campAdsetCounts=useMemo(()=>{
+    const c={};
+    for(const a of adsetRaw){
+      const k=a.campaign;
+      if(!c[k])c[k]=new Set();
+      c[k].add(a.name);
+    }
+    const out={};
+    for(const[k,s]of Object.entries(c))out[k]=s.size;
+    return out;
+  },[adsetRaw]);
   const campD=useMemo(()=>{
     const g={};
     for(const r of campRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2)})).sort((a,b)=>b.tot.s-a.tot.s);
-  },[campRaw,d1,d2]);
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2),cnt:campAdsetCounts[n]||0})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[campRaw,d1,d2,campAdsetCounts]);
 
   // Campaign drill-down: adsets belonging to clicked campaign
   const campDrillData=useMemo(()=>{
