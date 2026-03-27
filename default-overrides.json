@@ -93,6 +93,24 @@
     },
     "260326_JOINT RECOVERY SEEKER_Joints lander_ALT*": {
       "lander": "Joint Recovery"
+    },
+    "260306 Health Condition Solution Seeker (Why IM8 lander)_ALT*": {
+      "lander": "Why IM8"
+    },
+    "260313 ANGLE 1: Us vs Them (Comparison)(FNL) 1/2 - PROUPGRADELDP_ALT*": {
+      "lander": "Proof"
+    },
+    "260318 ANGLE 6: Supplement Stackers(BKM formula lander)_ALT*": {
+      "lander": "Beckham Formula"
+    },
+    "260318 ANGLE 6: Supplement Stackers(No bullshit lander)_ALT*": {
+      "lander": "No BS Lander"
+    },
+    "260313 ANGLE 1: Us vs Them (Comparison)(FNL) 2/2 - PROOFLDP_ALT*": {
+      "lander": "Proof"
+    },
+    "260326_GUT HEALTH_GetGUT Lander_ALT*": {
+      "lander": "GETGUT Lander"
     }
   },
   "notes": {
@@ -157,6 +175,9 @@
     "What's Missing": "X Reasons - /whats-missing",
     "Fitness Lander": "Persona - /for/fitness",
     "Young Professional": "Persona - /for/young-professional",
-    "Greens": "Persona - /for/greens"
+    "Greens": "Persona - /for/greens",
+    "Why IM8": "X Reasons - /why-im8",
+    "Proof": "X Reasons - /proof",
+    "Beckham Formula": "X Reasons - /beckham-formula"
   }
 }
