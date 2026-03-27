@@ -504,9 +504,15 @@ function Dashboard(){
         React.createElement('span',{style:{color:'#475569',fontSize:12,marginLeft:10}},config.accountName||'')
       ),
       React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
-        React.createElement('input',{type:'date',value:d1,onChange:e=>setD1(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}}),
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
+          React.createElement('span',{style:{color:'#94a3b8',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px'}},'Current Period'),
+          React.createElement('input',{type:'date',value:d2,onChange:e=>setD2(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}})
+        ),
         React.createElement('span',{style:{color:'#475569',fontSize:12}},'vs'),
-        React.createElement('input',{type:'date',value:d2,onChange:e=>setD2(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}}),
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
+          React.createElement('span',{style:{color:'#94a3b8',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px'}},'Prior Period'),
+          React.createElement('input',{type:'date',value:d1,onChange:e=>setD1(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}})
+        ),
         React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
@@ -534,8 +540,8 @@ function Dashboard(){
 
     // Legend
     React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
-      'Top = ',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
-      ' | Grey = ',React.createElement('b',{style:{color:'#475569'}},'('+d1Label+')'),
+      'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
+      ') | Below = Prior (',React.createElement('b',{style:{color:'#475569'}},d1Label),')'),
       ' | ',React.createElement('span',{style:{color:'#34d399'}},'Green'),' = improved | ',
       React.createElement('span',{style:{color:'#f87171'}},'Red'),' = declined',
       lastFetch&&React.createElement('span',{style:{marginLeft:12}},'Last fetch: '+lastFetch)
