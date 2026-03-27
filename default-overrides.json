@@ -146,13 +146,16 @@
       "lander": "Menopause"
     },
     "Collagen Winners + Potentials_ALT*": {
-      "lander": "Hair, Skin & Nails"
+      "lander": "Hair, Skin & Nails",
+      "angle": "Hair, Skin & Nails"
     },
     "GLP1 Winners + Potentials_ALT*": {
-      "lander": "GLP-1"
+      "lander": "GLP-1",
+      "angle": "GLP-1"
     },
     "Menopause Winners + Potentials_ALT*": {
-      "lander": "Menopause"
+      "lander": "Menopause",
+      "angle": "Menopause"
     }
   },
   "notes": {
