@@ -134,13 +134,16 @@
       "angle": "Gut Health"
     },
     "260306 Menopause Warriors (>45F)_ALT*": {
-      "angle": "Menopause"
+      "angle": "Menopause",
+      "lander": "Menopause"
     },
     "260309 Menopause Warriors (>45F)_ALT*": {
-      "angle": "Menopause"
+      "angle": "Menopause",
+      "lander": "Menopause"
     },
     "260317 Menopause Warriors (>45F)#2_ALT*": {
-      "angle": "Menopause"
+      "angle": "Menopause",
+      "lander": "Menopause"
     }
   },
   "notes": {
@@ -230,6 +233,30 @@
     "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP2/3(NERMW3-11PERSONA)_MT*": "Sleep, Weight, Pills & Young Professionals",
     "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP1/3(NERMW3-11PERSONA)_MT*": "Energy, Focus, Gut & Fitness",
     "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP3/3(NERMW3-11PERSONA)_MT*": "Joints, Immunity & Greens",
-    "campaigns::XX L3 | 20260316_TOFU_US_SUPERSCALER_ASC_AUTO_WINNERS_LC_MT*": "Legacy Ad"
+    "campaigns::XX L3 | 20260316_TOFU_US_SUPERSCALER_ASC_AUTO_WINNERS_LC_MT*": "Legacy Ad",
+    "landers::GLP-1": "X Reasons - /glp1",
+    "landers::Menopause": "X Reasons - /menopause",
+    "landers::Active Seniors": "X Reasons - /seniors",
+    "landers::Why IM8": "X Reasons - /why-im8",
+    "landers::Feel Again Lander": "X Reasons - /feel-again",
+    "landers::Hair, Skin & Nails": "X Reasons - /skin-health",
+    "landers::Dr Amy": "Ambassador - DrAmy",
+    "landers::No BS Lander": "X Reasons - /no-bs",
+    "landers::Proof": "X Reasons - /proof",
+    "landers::Science Lander": "X Reasons - /science",
+    "landers::Sleep": "Persona - /sleep",
+    "landers::GETGUT Lander": "Persona - /gut",
+    "landers::Focus Lander": "Persona - /focus",
+    "landers::Joint Recovery": "Persona - /joints",
+    "landers::Immunity": "Persona - /immune",
+    "landers::Weight": "Persona - /weight",
+    "landers::Pills": "Persona - /pills",
+    "landers::Beckham Formula": "X Reasons - /beckham-formula",
+    "landers::Energy": "Persona - /energy",
+    "landers::Act Now": "X Reasons - /act-now",
+    "landers::What's Missing": "X Reasons - /whats-missing",
+    "landers::Fitness Lander": "Persona - /fitness",
+    "landers::Young Professional": "Persona - /young-professionals",
+    "landers::Greens": "Persona - /greens"
   }
 }
