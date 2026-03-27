@@ -144,6 +144,15 @@
     "260317 Menopause Warriors (>45F)#2_ALT*": {
       "angle": "Menopause",
       "lander": "Menopause"
+    },
+    "Collagen Winners + Potentials_ALT*": {
+      "lander": "Hair, Skin & Nails"
+    },
+    "GLP1 Winners + Potentials_ALT*": {
+      "lander": "GLP-1"
+    },
+    "Menopause Winners + Potentials_ALT*": {
+      "lander": "Menopause"
     }
   },
   "notes": {
@@ -258,5 +267,31 @@
     "landers::Fitness Lander": "Persona - /fitness",
     "landers::Young Professional": "Persona - /young-professionals",
     "landers::Greens": "Persona - /greens"
+  },
+  "buckets": {
+    "GLP-1": "X Reasons",
+    "Menopause": "X Reasons",
+    "Active Seniors": "X Reasons",
+    "Why IM8": "X Reasons",
+    "Hair, Skin & Nails": "X Reasons",
+    "Feel Again Lander": "X Reasons",
+    "Dr Amy": "Ambassador",
+    "No BS Lander": "X Reasons",
+    "Proof": "X Reasons",
+    "Science Lander": "X Reasons",
+    "Sleep": "Persona",
+    "GETGUT Lander": "Persona",
+    "Focus Lander": "Persona",
+    "Joint Recovery": "Persona",
+    "Immunity": "Persona",
+    "Weight": "Persona",
+    "Pills": "Persona",
+    "Beckham Formula": "X Reasons",
+    "Energy": "Persona",
+    "Act Now": "X Reasons",
+    "What's Missing": "X Reasons",
+    "Fitness Lander": "Persona",
+    "Young Professional": "Persona",
+    "Greens": "Persona"
   }
 }
