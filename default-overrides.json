@@ -5,7 +5,7 @@
       "lander": "GETGUT Lander"
     },
     "260326 _PILL FATIGUE SIMPLIFIER_Pills lander_ALT*": {
-      "angle": "Supplement Stackers (Angle 6)",
+      "angle": "Pill Fatigue (Supp Stackers)",
       "lander": "Pills"
     },
     "260326_GREEN POWDER SWITCHER_Greens lander_ALT*": {
@@ -41,76 +41,106 @@
       "lander": "Fitness Lander"
     },
     "260306 ACTIVE SENIOR (>45)_ALT*": {
-      "lander": "Active Seniors"
+      "lander": "Active Seniors",
+      "angle": "Active Seniors"
     },
     "260306 GLP-1_ALT*": {
-      "lander": "GLP-1"
+      "lander": "GLP-1",
+      "angle": "GLP-1"
     },
     "260306 Menopause Warriors (>40F)_ALT*": {
       "lander": "Menopause"
     },
     "260309 Collagen Restorer ICP_ALT*": {
-      "lander": "Hair, Skin & Nails"
+      "lander": "Hair, Skin & Nails",
+      "angle": "Hair, Skin & Nails"
     },
     "260309 Menopause Warriors (>40F)_ALT*": {
       "lander": "Menopause"
     },
     "260313 ANGLE 5: Supplement Skeptics(DRAMYSHAH#1-Most Vitamins Are Useless) _ALT*": {
-      "lander": "Dr Amy"
+      "lander": "Dr Amy",
+      "angle": "Supplement Skeptics"
     },
     "260313 ANGLE 5: Supplement Skeptics(DRAMYSHAH#2-Why I Stopped Taking 12 Different Supplements) _ALT*": {
-      "lander": "Dr Amy"
+      "lander": "Dr Amy",
+      "angle": "Supplement Skeptics"
     },
     "260313 ANGLE 8: Aging After 30  (Gave them back energy & clarity)_ALT*": {
-      "lander": "Feel Again Lander"
+      "lander": "Feel Again Lander",
+      "angle": "Aging after 30"
     },
     "260313 Collagen Restorer ICP_ALT*": {
-      "lander": "Hair, Skin & Nails"
+      "lander": "Hair, Skin & Nails",
+      "angle": "Hair, Skin & Nails"
     },
     "260313 ACTIVE SENIOR (>45)_ALT*": {
-      "lander": "Active Seniors"
+      "lander": "Active Seniors",
+      "angle": "Active Seniors"
     },
     "260313 ANGLE 4: Clinical Trial Results (Evidence that it works)_ALT*": {
-      "lander": "What's Missing"
+      "lander": "What's Missing",
+      "angle": "Clinical Evidence"
     },
     "260313 ANGLE 3: Scientific Advancements (New Developments)_ALT*": {
-      "lander": "Science Lander"
+      "lander": "Science Lander",
+      "angle": "Science"
     },
     "260317 ACTIVE SENIOR (>45)#2_ALT*": {
-      "lander": "Active Seniors"
+      "lander": "Active Seniors",
+      "angle": "Active Seniors"
     },
     "260313 ANGLE 2: Preventative Healthcare (Now is the time)_ALT*": {
-      "lander": "Act Now"
+      "lander": "Act Now",
+      "angle": "Preventative Healthcare"
     },
     "260317 Collagen Restorer ICP#2_ALT*": {
-      "lander": "Hair, Skin & Nails"
+      "lander": "Hair, Skin & Nails",
+      "angle": "Hair, Skin & Nails"
     },
     "260317 GLP-1#2_ALT*": {
-      "lander": "GLP-1"
+      "lander": "GLP-1",
+      "angle": "GLP-1"
     },
     "260317 Menopause Warriors (>40F)#2_ALT*": {
       "lander": "Menopause"
     },
     "260326_JOINT RECOVERY SEEKER_Joints lander_ALT*": {
-      "lander": "Joint Recovery"
+      "lander": "Joint Recovery",
+      "angle": "Joint Health"
     },
     "260306 Health Condition Solution Seeker (Why IM8 lander)_ALT*": {
-      "lander": "Why IM8"
+      "lander": "Why IM8",
+      "angle": "Health Conditions"
     },
     "260313 ANGLE 1: Us vs Them (Comparison)(FNL) 1/2 - PROUPGRADELDP_ALT*": {
-      "lander": "Proof"
+      "lander": "Proof",
+      "angle": "Comparison Ads"
     },
     "260318 ANGLE 6: Supplement Stackers(BKM formula lander)_ALT*": {
-      "lander": "Beckham Formula"
+      "lander": "Beckham Formula",
+      "angle": "Supplement Stackers"
     },
     "260318 ANGLE 6: Supplement Stackers(No bullshit lander)_ALT*": {
-      "lander": "No BS Lander"
+      "lander": "No BS Lander",
+      "angle": "Supplement Stackers"
     },
     "260313 ANGLE 1: Us vs Them (Comparison)(FNL) 2/2 - PROOFLDP_ALT*": {
-      "lander": "Proof"
+      "lander": "Proof",
+      "angle": "Comparison Ads"
     },
     "260326_GUT HEALTH_GetGUT Lander_ALT*": {
-      "lander": "GETGUT Lander"
+      "lander": "GETGUT Lander",
+      "angle": "Gut Health"
+    },
+    "260306 Menopause Warriors (>45F)_ALT*": {
+      "angle": "Menopause"
+    },
+    "260309 Menopause Warriors (>45F)_ALT*": {
+      "angle": "Menopause"
+    },
+    "260317 Menopause Warriors (>45F)#2_ALT*": {
+      "angle": "Menopause"
     }
   },
   "notes": {
