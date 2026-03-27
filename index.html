@@ -589,19 +589,21 @@ function Dashboard(){
               }},r.n),
               r.cnt!=null&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.cnt+' adset'+(r.cnt!==1?'s':''))
             ),
-            React.createElement('td',{style:{...S.td,minWidth:120,maxWidth:200}},
-              editingNote===r.n
+            React.createElement('td',{style:{...S.td,minWidth:120,maxWidth:200}},(()=>{
+              const nk=tab+'::'+r.n;
+              return editingNote===nk
                 ? React.createElement('input',{
                     autoFocus:true,
-                    defaultValue:notes[r.n]||'',
-                    onBlur:e=>saveNote(r.n,e.target.value),
-                    onKeyDown:e=>{if(e.key==='Enter')saveNote(r.n,e.target.value);if(e.key==='Escape')setEditingNote(null);},
+                    defaultValue:notes[nk]||'',
+                    onBlur:e=>saveNote(nk,e.target.value),
+                    onKeyDown:e=>{if(e.key==='Enter')saveNote(nk,e.target.value);if(e.key==='Escape')setEditingNote(null);},
                     style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontWeight:700,width:'100%',outline:'none'}
                   })
                 : React.createElement('div',{
-                    onClick:()=>setEditingNote(r.n),
-                    style:{cursor:'pointer',fontWeight:700,color:notes[r.n]?'#e2e8f0':'#334155',minHeight:20,padding:'2px 0',wordBreak:'break-word'}
-                  },notes[r.n]||'Click to add...')
+                    onClick:()=>setEditingNote(nk),
+                    style:{cursor:'pointer',fontWeight:700,color:notes[nk]?'#e2e8f0':'#334155',minHeight:20,padding:'2px 0',wordBreak:'break-word'}
+                  },notes[nk]||'Click to add...');
+              })()
             ),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,format:'$'})),
             React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,format:'n'})),
