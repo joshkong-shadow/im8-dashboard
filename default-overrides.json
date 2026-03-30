@@ -156,6 +156,18 @@
     "Menopause Winners + Potentials_ALT*": {
       "lander": "Menopause",
       "angle": "Menopause"
+    },
+    "260327_Athletes_ DrARA World class athletes lander_ALT*": {
+      "lander": "DrAra",
+      "angle": "Athletes"
+    },
+    "260327_Medical Recovery_DrDAWN#2-Cancer surviver lander_ALT*": {
+      "lander": "DrDawn",
+      "angle": "Medical Reovery"
+    },
+    "260327_Aging_ DrDAWN#1-Slow aging lander)_ALT*": {
+      "lander": "DrDawn",
+      "angle": "Aging - General"
     }
   },
   "notes": {
@@ -269,7 +281,9 @@
     "landers::What's Missing": "X Reasons - /whats-missing",
     "landers::Fitness Lander": "Persona - /fitness",
     "landers::Young Professional": "Persona - /young-professionals",
-    "landers::Greens": "Persona - /greens"
+    "landers::Greens": "Persona - /greens",
+    "landers::DrDawn": "Ambassador - Dr Dawn",
+    "landers::DrAra": "Ambassador - DrAra"
   },
   "buckets": {
     "GLP-1": "X Reasons",
@@ -295,6 +309,8 @@
     "What's Missing": "X Reasons",
     "Fitness Lander": "Persona",
     "Young Professional": "Persona",
-    "Greens": "Persona"
+    "Greens": "Persona",
+    "DrDawn": "Ambassador",
+    "DrAra": "Ambassador"
   }
 }
