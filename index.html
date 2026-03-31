@@ -168,15 +168,16 @@ function labelCampaign(c){
 }
 
 // ═══ AGGREGATE ══════════════════════════════════════════════════════════════
-function aggregate(rows, d1Key, d2Key){
-  const bd={};let tS=0,tP=0,tR=0,tA=0,tL=0;
+function aggregate(rows, curFrom, curTo, priFrom, priTo, w7From, w7To){
+  const bd={};
   for(const r of rows){
     const d=r.day;if(!bd[d])bd[d]={s:0,p:0,r:0,a:0,l:0};
     bd[d].s+=r.spend;bd[d].p+=r.purch;bd[d].r+=r.rev;bd[d].a+=r.atc;bd[d].l+=r.lpv;
-    tS+=r.spend;tP+=r.purch;tR+=r.rev;tA+=r.atc;tL+=r.lpv;
   }
+  const sumRange=(from,to)=>{let s=0,p=0,r=0,a=0,l=0;for(const[d,v] of Object.entries(bd)){if(d>=from&&d<=to){s+=v.s;p+=v.p;r+=v.r;a+=v.a;l+=v.l;}}return{s,p,r,a,l};};
   const mk=o=>({s:o.s,p:o.p,roas:o.s>0?o.r/o.s:0,cpa:o.p>0?o.s/o.p:null,atc:o.l>0?o.a/o.l*100:0,cvr:o.l>0?o.p/o.l*100:0});
-  return{tot:mk({s:tS,p:tP,r:tR,a:tA,l:tL}),d1:bd[d1Key]?mk(bd[d1Key]):null,d2:bd[d2Key]?mk(bd[d2Key]):null,cnt:new Set(rows.map(r=>r.name)).size};
+  const curData=sumRange(curFrom,curTo), priData=sumRange(priFrom,priTo), w7Data=sumRange(w7From,w7To), totData=sumRange('0000-00-00','9999-99-99');
+  return{tot:mk(totData),d2:(curData.s>0||curData.p>0)?mk(curData):null,d1:(priData.s>0||priData.p>0)?mk(priData):null,w7:(w7Data.s>0||w7Data.p>0)?mk(w7Data):null,cnt:new Set(rows.map(r=>r.name)).size};
 }
 
 // ═══ STYLES ═════════════════════════════════════════════════════════════════
@@ -189,9 +190,10 @@ const S = {
 };
 
 // ═══ DOD CELL ═══════════════════════════════════════════════════════════════
-function DoDCell({cur,prev,format,invert,isRoas}){
+function DoDCell({cur,prev,w7,format,invert,isRoas}){
   const f=v=>{if(v==null)return"\u2014";if(format==="$")return"$"+Math.round(v).toLocaleString();if(format==="%")return v.toFixed(1)+"%";if(format==="cvr")return v.toFixed(2)+"%";if(format==="x")return v.toFixed(2)+"x";if(format==="n")return Math.round(v).toLocaleString();return String(v);};
   const sz={fontSize:13,fontWeight:600,...S.mono};
+  const w7Line=w7!=null&&React.createElement('div',{style:{color:'#586880',fontSize:10,fontWeight:500,...S.mono,marginTop:1}},'['+f(w7)+']');
 
   // Determine arrow for non-ROAS cells
   let arrow=null;
@@ -200,8 +202,6 @@ function DoDCell({cur,prev,format,invert,isRoas}){
     const t=format==="$"?3:0.2;
     if(Math.abs(d)>t){
       const good=invert?d<0:d>0;
-      arrow=React.createElement('span',{style:{marginLeft:4,fontSize:13}},good?'\u2191':'\u2193');
-      // Color only the arrow
       arrow=React.createElement('span',{style:{marginLeft:4,fontSize:13,color:good?'#34d399':'#f87171'}},good?'\u2191':'\u2193');
     }
   }
@@ -211,12 +211,14 @@ function DoDCell({cur,prev,format,invert,isRoas}){
     const bg=cur>=1.0?'#06261a':cur>=0.8?'#26230a':'#260a0a';
     return React.createElement('div',{style:{textAlign:'center'}},
       React.createElement('div',{style:{background:bg,color:rc,padding:'2px 6px',borderRadius:3,...sz,display:'inline-block',minWidth:48}},f(cur)),
-      prev!=null&&React.createElement('div',{style:{color:'#94a3b8',...sz,marginTop:2}},f(prev))
+      prev!=null&&React.createElement('div',{style:{color:'#94a3b8',...sz,marginTop:2}},f(prev)),
+      w7Line
     );
   }
   return React.createElement('div',null,
     React.createElement('div',{style:{color:'#e2e8f0',...sz}},f(cur),arrow),
-    prev!=null&&React.createElement('div',{style:{color:'#94a3b8',...sz,marginTop:2}},f(prev))
+    prev!=null&&React.createElement('div',{style:{color:'#94a3b8',...sz,marginTop:2}},f(prev)),
+    w7Line
   );
 }
 
@@ -392,8 +394,13 @@ function Dashboard(){
   const yesterday = new Date(today);yesterday.setDate(today.getDate()-1);
   const dayBefore = new Date(today);dayBefore.setDate(today.getDate()-2);
   const fmt=d=>d.toISOString().split('T')[0];
-  const[d2,setD2]=useState(fmt(yesterday));
-  const[d1,setD1]=useState(fmt(dayBefore));
+  const[curFrom,setCurFrom]=useState(fmt(yesterday));
+  const[curTo,setCurTo]=useState(fmt(yesterday));
+  const[priFrom,setPriFrom]=useState(fmt(dayBefore));
+  const[priTo,setPriTo]=useState(fmt(dayBefore));
+  // 7-day trailing window ending on curTo
+  const w7To=curTo;
+  const w7From=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-6);return fmt(d);},[curTo]);
 
   const save=useCallback(nx=>{setOv(nx);LS.set('overrides',nx);},[]);
 
@@ -403,8 +410,10 @@ function Dashboard(){
   const fetchData=useCallback(async()=>{
     if(!config)return;
     setLoading(true);setError('');
-    // Ensure dates are in correct order (since <= until)
-    const dateFrom=d1<=d2?d1:d2, dateTo=d1<=d2?d2:d1;
+    // Expand date range to cover all periods: prior, current, and 7d trailing
+    const allDates=[curFrom,curTo,priFrom,priTo,w7From];
+    const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
+    const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
     try{
       // Fetch campaign-level insights
       const campData=await fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo);
@@ -431,7 +440,7 @@ function Dashboard(){
       setAdsetRaw(adsetParsed);
 
       // Cache the fetch
-      const cacheKey = `${d1}_${d2}`;
+      const cacheKey = `${curFrom}_${curTo}_${priFrom}_${priTo}`;
       const history = LS.get('history',{});
       history[cacheKey] = {campaigns:campParsed,adsets:adsetParsed,fetchedAt:new Date().toISOString()};
       LS.set('history',history);
@@ -439,7 +448,7 @@ function Dashboard(){
     }catch(e){
       setError(e.message);
       // Try loading from cache
-      const cacheKey = `${d1}_${d2}`;
+      const cacheKey = `${curFrom}_${curTo}_${priFrom}_${priTo}`;
       const history = LS.get('history',{});
       if(history[cacheKey]){
         setCampRaw(history[cacheKey].campaigns);
@@ -448,10 +457,10 @@ function Dashboard(){
       }
     }
     setLoading(false);
-  },[config,d1,d2]);
+  },[config,curFrom,curTo,priFrom,priTo,w7From]);
 
   // Auto-fetch on config load or date change
-  useEffect(()=>{if(config)fetchData();},[config,d1,d2]);
+  useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
 
   // Process adsets with overrides — _ALT filter only for angles/landers tabs
   const ads=useMemo(()=>adsetRaw.filter(r=>/_ALT/.test(r.name)).map(r=>{
@@ -463,10 +472,10 @@ function Dashboard(){
   const grp=(key)=>{
     const g={};
     for(const a of ads){const k=a[key];if(!g[k])g[k]=[];g[k].push(a);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2)})).sort((a,b)=>b.tot.s-a.tot.s);
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To)})).sort((a,b)=>b.tot.s-a.tot.s);
   };
-  const angD=useMemo(()=>grp("angle"),[ads,d1,d2]);
-  const lnD=useMemo(()=>grp("lander"),[ads,d1,d2]);
+  const angD=useMemo(()=>grp("angle"),[ads,curFrom,curTo,priFrom,priTo,w7From,w7To]);
+  const lnD=useMemo(()=>grp("lander"),[ads,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
   // Bucket aggregation — group landers into buckets
   const bucketD=useMemo(()=>{
@@ -474,8 +483,8 @@ function Dashboard(){
     const bucketedAds=ads.map(a=>({...a,bucket:buckets[a.lander]||'Unassigned'}));
     const g={};
     for(const a of bucketedAds){const k=a.bucket;if(!g[k])g[k]=[];g[k].push(a);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2),landerCount:new Set(rows.map(r=>r.lander)).size})).sort((a,b)=>b.tot.s-a.tot.s);
-  },[ads,buckets,d1,d2]);
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To),landerCount:new Set(rows.map(r=>r.lander)).size})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[ads,buckets,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
   // Campaign aggregation — count adsets from adsetRaw
   const campAdsetCounts=useMemo(()=>{
@@ -492,8 +501,8 @@ function Dashboard(){
   const campD=useMemo(()=>{
     const g={};
     for(const r of campRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2),cnt:campAdsetCounts[n]||0})).sort((a,b)=>b.tot.s-a.tot.s);
-  },[campRaw,d1,d2,campAdsetCounts]);
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To),cnt:campAdsetCounts[n]||0})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[campRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,campAdsetCounts]);
 
   // Campaign drill-down: adsets belonging to clicked campaign
   const campDrillData=useMemo(()=>{
@@ -503,8 +512,8 @@ function Dashboard(){
     const matchingAdsets=adsetRaw.filter(r=>rawNames.has(r.campaign));
     const g={};
     for(const a of matchingAdsets){const k=a.name;if(!g[k])g[k]=[];g[k].push(a);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2)})).sort((a,b)=>b.tot.s-a.tot.s);
-  },[campDrill,campRaw,adsetRaw,d1,d2]);
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To)})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[campDrill,campRaw,adsetRaw,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
   // Angle/Lander drill-down: adsets belonging to clicked angle or lander
   const drillDownData=useMemo(()=>{
@@ -512,8 +521,8 @@ function Dashboard(){
     const matching=ads.filter(a=>drillDown.type==='angle'?a.angle===drillDown.name:a.lander===drillDown.name);
     const g={};
     for(const a of matching){const k=a.name;if(!g[k])g[k]=[];g[k].push(a);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,d1,d2)})).sort((a,b)=>b.tot.s-a.tot.s);
-  },[drillDown,ads,d1,d2]);
+    return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To)})).sort((a,b)=>b.tot.s-a.tot.s);
+  },[drillDown,ads,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
   const fl=d=>d.filter(r=>{if(r.tot.s<fms)return false;if(fr==="above"&&r.tot.roas<1)return false;if(fr==="below"&&r.tot.roas>=1)return false;if(fr==="watch"&&(r.tot.roas<0.7||r.tot.roas>=1))return false;return true;});
 
@@ -527,8 +536,10 @@ function Dashboard(){
   const tS=data.reduce((a,c)=>a+c.tot.s,0);
   const tP=data.reduce((a,c)=>a+c.tot.p,0);
 
-  const d2Label = new Date(d2+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  const d1Label = new Date(d1+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const fmtLabel=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const d2Label = curFrom===curTo?fmtLabel(curTo):fmtLabel(curFrom)+' – '+fmtLabel(curTo);
+  const d1Label = priFrom===priTo?fmtLabel(priTo):fmtLabel(priFrom)+' – '+fmtLabel(priTo);
+  const w7Label = fmtLabel(w7From)+' – '+fmtLabel(w7To);
 
   return React.createElement('div',{style:{padding:'20px 16px',maxWidth:1200,margin:'0 auto'}},
     // Header
@@ -537,15 +548,23 @@ function Dashboard(){
         React.createElement('span',{style:{fontSize:20,fontWeight:700,letterSpacing:-0.5}},'IM8 Testing Snapshot'),
         React.createElement('span',{style:{color:'#475569',fontSize:12,marginLeft:10}},config.accountName||'')
       ),
-      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
         React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
           React.createElement('span',{style:{color:'#94a3b8',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px'}},'Current Period'),
-          React.createElement('input',{type:'date',value:d2,onChange:e=>setD2(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}})
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4}},
+            React.createElement('input',{type:'date',value:curFrom,onChange:e=>setCurFrom(e.target.value),style:{...S.input,width:130,padding:'4px 6px',fontSize:11}}),
+            React.createElement('span',{style:{color:'#475569',fontSize:10}},'to'),
+            React.createElement('input',{type:'date',value:curTo,onChange:e=>setCurTo(e.target.value),style:{...S.input,width:130,padding:'4px 6px',fontSize:11}})
+          )
         ),
         React.createElement('span',{style:{color:'#475569',fontSize:12}},'vs'),
         React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
           React.createElement('span',{style:{color:'#94a3b8',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px'}},'Prior Period'),
-          React.createElement('input',{type:'date',value:d1,onChange:e=>setD1(e.target.value),style:{...S.input,width:140,padding:'4px 8px',fontSize:12}})
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4}},
+            React.createElement('input',{type:'date',value:priFrom,onChange:e=>setPriFrom(e.target.value),style:{...S.input,width:130,padding:'4px 6px',fontSize:11}}),
+            React.createElement('span',{style:{color:'#475569',fontSize:10}},'to'),
+            React.createElement('input',{type:'date',value:priTo,onChange:e=>setPriTo(e.target.value),style:{...S.input,width:130,padding:'4px 6px',fontSize:11}})
+          )
         ),
         React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
@@ -576,6 +595,7 @@ function Dashboard(){
     React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
       'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
       ') | Below = Prior (',React.createElement('b',{style:{color:'#475569'}},d1Label),')',
+      ' | [Brackets] = 7d (',React.createElement('b',{style:{color:'#586880'}},w7Label),')',
       ' | ',React.createElement('span',{style:{color:'#34d399'}},'Green'),' = improved | ',
       React.createElement('span',{style:{color:'#f87171'}},'Red'),' = declined',
       lastFetch&&React.createElement('span',{style:{marginLeft:12}},'Last fetch: '+lastFetch)
@@ -608,12 +628,12 @@ function Dashboard(){
               React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
               React.createElement('td',{style:{...S.td,fontWeight:700,color:'#e2e8f0'}},b.n),
               React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',fontSize:12}},b.landerCount),
-              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.s,prev:b.d1?.s,format:'$'})),
-              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.p,prev:b.d1?.p,format:'n'})),
-              React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:b.d2?.roas,prev:b.d1?.roas,format:'x',isRoas:true})),
-              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cpa,prev:b.d1?.cpa,format:'$',invert:true})),
-              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.atc,prev:b.d1?.atc,format:'%'})),
-              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cvr,prev:b.d1?.cvr,format:'cvr'}))
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.s,prev:b.d1?.s,w7:b.w7?.s,format:'$'})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.p,prev:b.d1?.p,w7:b.w7?.p,format:'n'})),
+              React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:b.d2?.roas,prev:b.d1?.roas,w7:b.w7?.roas,format:'x',isRoas:true})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cpa,prev:b.d1?.cpa,w7:b.w7?.cpa,format:'$',invert:true})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.atc,prev:b.d1?.atc,w7:b.w7?.atc,format:'%'})),
+              React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cvr,prev:b.d1?.cvr,w7:b.w7?.cvr,format:'cvr'}))
             )
           ))
         )
@@ -662,12 +682,12 @@ function Dashboard(){
                   },notes[nk]||'Click to add...');
               })()
             ),
-            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,format:'$'})),
-            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,format:'n'})),
-            React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:r.d2?.roas,prev:r.d1?.roas,format:'x',isRoas:true})),
-            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cpa,prev:r.d1?.cpa,format:'$',invert:true})),
-            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.atc,prev:r.d1?.atc,format:'%'})),
-            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cvr,prev:r.d1?.cvr,format:'cvr'})),
+            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,w7:r.w7?.s,format:'$'})),
+            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,w7:r.w7?.p,format:'n'})),
+            React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:r.d2?.roas,prev:r.d1?.roas,w7:r.w7?.roas,format:'x',isRoas:true})),
+            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cpa,prev:r.d1?.cpa,w7:r.w7?.cpa,format:'$',invert:true})),
+            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.atc,prev:r.d1?.atc,w7:r.w7?.atc,format:'%'})),
+            React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cvr,prev:r.d1?.cvr,w7:r.w7?.cvr,format:'cvr'})),
             tab==='landers'&&React.createElement('td',{style:{...S.td,minWidth:100}},(()=>{
               const allBucketNames=[...new Set(Object.values(buckets))].sort();
               const curBucket=buckets[r.n]||'';
@@ -721,10 +741,10 @@ function Dashboard(){
               React.createElement('tbody',null,campDrillData.map((a,i)=>
                 React.createElement('tr',{key:a.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
                   React.createElement('td',{style:{...S.td,fontSize:11,color:'#e2e8f0',wordBreak:'break-word',maxWidth:200,lineHeight:1.3}},a.n),
-                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.s,prev:a.d1?.s,format:'$'})),
-                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:a.d2?.roas,prev:a.d1?.roas,format:'x',isRoas:true})),
-                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.p,prev:a.d1?.p,format:'n'})),
-                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.cpa,prev:a.d1?.cpa,format:'$',invert:true}))
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.s,prev:a.d1?.s,w7:a.w7?.s,format:'$'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:a.d2?.roas,prev:a.d1?.roas,w7:a.w7?.roas,format:'x',isRoas:true})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.p,prev:a.d1?.p,w7:a.w7?.p,format:'n'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.cpa,prev:a.d1?.cpa,w7:a.w7?.cpa,format:'$',invert:true}))
                 )
               ))
             )
@@ -756,10 +776,10 @@ function Dashboard(){
                 React.createElement('tr',{key:a.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
                   React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
                   React.createElement('td',{style:{...S.td,fontSize:11,color:'#e2e8f0',wordBreak:'break-word',maxWidth:200,lineHeight:1.3}},a.n),
-                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.s,prev:a.d1?.s,format:'$'})),
-                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:a.d2?.roas,prev:a.d1?.roas,format:'x',isRoas:true})),
-                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.p,prev:a.d1?.p,format:'n'})),
-                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.cpa,prev:a.d1?.cpa,format:'$',invert:true}))
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.s,prev:a.d1?.s,w7:a.w7?.s,format:'$'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:a.d2?.roas,prev:a.d1?.roas,w7:a.w7?.roas,format:'x',isRoas:true})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.p,prev:a.d1?.p,w7:a.w7?.p,format:'n'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:a.d2?.cpa,prev:a.d1?.cpa,w7:a.w7?.cpa,format:'$',invert:true}))
                 )
               ))
             )
