@@ -354,7 +354,13 @@
     "landers::DrDawn": "Ambassador - Dr Dawn",
     "landers::DrAra": "Ambassador - DrAra",
     "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP3/3(NERMW3-11PERSONA)_JOINTS_MT*": "Joint Health",
-    "campaigns::L3 | 20260316_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE3,PROMPT)_MT*": "AI Prompting if IM8 is good"
+    "campaigns::L3 | 20260316_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE3,PROMPT)_MT*": "AI Prompting if IM8 is good",
+    "angles::Health Conditions": "Scale",
+    "angles::Aging after 30": "Scale",
+    "angles::Supplement Skeptics": "Scale",
+    "angles::Science": "Scale",
+    "angles::Joint Health": "Scale",
+    "angles::Medical Reovery": "Scale"
   },
   "buckets": {
     "GLP-1": "X Reasons",
