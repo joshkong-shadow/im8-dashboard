@@ -168,6 +168,75 @@
     "260327_Aging_ DrDAWN#1-Slow aging lander)_ALT*": {
       "lander": "DrDawn",
       "angle": "Aging - General"
+    },
+    "260313 ANGLE 5: Supplement Skeptics(WHY IM8) _ALT*": {
+      "angle": "Supplement Skeptics"
+    },
+    "260330 Supplement Skeptics (Prompt lander)_ALT*": {
+      "angle": "Supplement Skeptics"
+    },
+    "260331 _IMMUNE WARRIOR_Immune lander_ALT*": {
+      "angle": "Immunity"
+    },
+    "260331_GREEN POWDER SWITCHER_Greens lander_ALT*": {
+      "angle": "GreensPowder Switcher"
+    },
+    "260331_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT*": {
+      "angle": "Weightloss"
+    },
+    "260331_YOUNG PROFESSIONAL_Young professional lander_ALT*": {
+      "angle": "Young Professionals"
+    },
+    "260331_JOINT RECOVERY SEEKER#2_Joints lander_ALT*": {
+      "angle": "Joint Health"
+    },
+    "260402 ANGLE 9: Medical Recovery(MONASHARMA#2-How i Survived 2 heart surgeries)_ALT*": {
+      "angle": "Medical Reovery"
+    },
+    "260402 ANGLE 10: Biohacking(MONASHARMA#1-Beyond the biohack)_ALT*": {
+      "angle": "Biohacking"
+    },
+    "260401_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT*": {
+      "angle": "Weightloss"
+    },
+    "260401 _IMMUNE WARRIOR_Immune lander_ALT*": {
+      "angle": "Immunity"
+    },
+    "260401_YOUNG PROFESSIONAL_Young professional lander_ALT*": {
+      "angle": "Young Professionals"
+    },
+    "260401_GREEN POWDER SWITCHER_Greens lander_ALT*": {
+      "angle": "GreensPowder Switcher"
+    },
+    "260401 _COGNITIVE PERFORMER_Focus Lander_ALT*": {
+      "angle": "Brain Health"
+    },
+    "260401_FITNESS ENTHUSIAST_Fitness lander_ALT*": {
+      "angle": "Fitness Enthusiasts"
+    },
+    "260401_GUT HEALTH_GetGUT Lander_ALT*": {
+      "angle": "Gut Health"
+    },
+    "260401_ENERGY SEEKER_Energy Lander_ALT*": {
+      "angle": "Energy"
+    },
+    "260402 Menopause / Hormonal Woman (>45F)_ALT*": {
+      "angle": "Menopause"
+    },
+    "260402 Menopause / Hormonal Woman (>45F)#2_ALT*": {
+      "angle": "Menopause"
+    },
+    "260402 Skin/Hair/Nails Collagen ICP_ALT*": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260402 Skin/Hair/Nails Collagen ICP #2_ALT*": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260307 Collagen Restorer ICP_ALT*": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260309 ACTIVE SENIOR (>45)_ALT*": {
+      "angle": "Active Seniors"
     }
   },
   "notes": {
@@ -283,7 +352,9 @@
     "landers::Young Professional": "Persona - /young-professionals",
     "landers::Greens": "Persona - /greens",
     "landers::DrDawn": "Ambassador - Dr Dawn",
-    "landers::DrAra": "Ambassador - DrAra"
+    "landers::DrAra": "Ambassador - DrAra",
+    "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP3/3(NERMW3-11PERSONA)_JOINTS_MT*": "Joint Health",
+    "campaigns::L3 | 20260316_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP(ANGLE3,PROMPT)_MT*": "AI Prompting if IM8 is good"
   },
   "buckets": {
     "GLP-1": "X Reasons",
