@@ -170,73 +170,96 @@
       "angle": "Aging - General"
     },
     "260313 ANGLE 5: Supplement Skeptics(WHY IM8) _ALT*": {
-      "angle": "Supplement Skeptics"
+      "angle": "Supplement Skeptics",
+      "lander": "Why IM8"
     },
     "260330 Supplement Skeptics (Prompt lander)_ALT*": {
-      "angle": "Supplement Skeptics"
+      "angle": "Supplement Skeptics",
+      "lander": "AI Prompt Lander"
     },
     "260331 _IMMUNE WARRIOR_Immune lander_ALT*": {
-      "angle": "Immunity"
+      "angle": "Immunity",
+      "lander": "Immunity"
     },
     "260331_GREEN POWDER SWITCHER_Greens lander_ALT*": {
-      "angle": "GreensPowder Switcher"
+      "angle": "GreensPowder Switcher",
+      "lander": "Greens"
     },
     "260331_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT*": {
-      "angle": "Weightloss"
+      "angle": "Weightloss",
+      "lander": "Weight"
     },
     "260331_YOUNG PROFESSIONAL_Young professional lander_ALT*": {
-      "angle": "Young Professionals"
+      "angle": "Young Professionals",
+      "lander": "Young Professional"
     },
     "260331_JOINT RECOVERY SEEKER#2_Joints lander_ALT*": {
-      "angle": "Joint Health"
+      "angle": "Joint Health",
+      "lander": "Joint Recovery"
     },
     "260402 ANGLE 9: Medical Recovery(MONASHARMA#2-How i Survived 2 heart surgeries)_ALT*": {
-      "angle": "Medical Reovery"
+      "angle": "Medical Reovery",
+      "lander": "Mona Sharma"
     },
     "260402 ANGLE 10: Biohacking(MONASHARMA#1-Beyond the biohack)_ALT*": {
-      "angle": "Biohacking"
+      "angle": "Biohacking",
+      "lander": "Mona Sharma"
     },
     "260401_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT*": {
-      "angle": "Weightloss"
+      "angle": "Weightloss",
+      "lander": "Weight"
     },
     "260401 _IMMUNE WARRIOR_Immune lander_ALT*": {
-      "angle": "Immunity"
+      "angle": "Immunity",
+      "lander": "Immunity"
     },
     "260401_YOUNG PROFESSIONAL_Young professional lander_ALT*": {
-      "angle": "Young Professionals"
+      "angle": "Young Professionals",
+      "lander": "Young Professional"
     },
     "260401_GREEN POWDER SWITCHER_Greens lander_ALT*": {
-      "angle": "GreensPowder Switcher"
+      "angle": "GreensPowder Switcher",
+      "lander": "Greens"
     },
     "260401 _COGNITIVE PERFORMER_Focus Lander_ALT*": {
-      "angle": "Brain Health"
+      "angle": "Brain Health",
+      "lander": "Focus Lander"
     },
     "260401_FITNESS ENTHUSIAST_Fitness lander_ALT*": {
-      "angle": "Fitness Enthusiasts"
+      "angle": "Fitness Enthusiasts",
+      "lander": "Fitness Lander"
     },
     "260401_GUT HEALTH_GetGUT Lander_ALT*": {
-      "angle": "Gut Health"
+      "angle": "Gut Health",
+      "lander": "GETGUT Lander"
     },
     "260401_ENERGY SEEKER_Energy Lander_ALT*": {
-      "angle": "Energy"
+      "angle": "Energy",
+      "lander": "Energy"
     },
     "260402 Menopause / Hormonal Woman (>45F)_ALT*": {
-      "angle": "Menopause"
+      "angle": "Menopause",
+      "lander": "Menopause"
     },
     "260402 Menopause / Hormonal Woman (>45F)#2_ALT*": {
-      "angle": "Menopause"
+      "angle": "Menopause",
+      "lander": "Menopause"
     },
     "260402 Skin/Hair/Nails Collagen ICP_ALT*": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260402 Skin/Hair/Nails Collagen ICP #2_ALT*": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260307 Collagen Restorer ICP_ALT*": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260309 ACTIVE SENIOR (>45)_ALT*": {
-      "angle": "Active Seniors"
+      "angle": "Active Seniors",
+      "lander": "Active Seniors"
     }
   },
   "notes": {
@@ -360,7 +383,8 @@
     "angles::Supplement Skeptics": "Scale",
     "angles::Science": "Scale",
     "angles::Joint Health": "Scale",
-    "angles::Medical Reovery": "Scale"
+    "angles::Medical Reovery": "Scale",
+    "landers::Mona Sharma": "Ambassador - Mona Sharma"
   },
   "buckets": {
     "GLP-1": "X Reasons",
@@ -388,6 +412,8 @@
     "Young Professional": "Persona",
     "Greens": "Persona",
     "DrDawn": "Ambassador",
-    "DrAra": "Ambassador"
+    "DrAra": "Ambassador",
+    "AI Prompt Lander": "AI Prompt",
+    "Mona Sharma": "Ambassador"
   }
 }
