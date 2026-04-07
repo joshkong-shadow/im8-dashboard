@@ -312,6 +312,39 @@
     "260403 ANGLE 9: Medical Recovery(MONASHARMA#2-How i Survived 2 heart surgeries)_ALT*": {
       "angle": "Medical Reovery",
       "lander": "Mona Sharma"
+    },
+    "260403_BEAUTYFROMWITHIN_Beauty Lander_ALT*": {
+      "angle": "Beauty"
+    },
+    "260403_MORNINGRITUALLOVER_MorningRitual Lander_ALT*": {
+      "angle": "Morning Ritual"
+    },
+    "260403_FREQUENTFLYERS_Travelers Lander_ALT*": {
+      "angle": "Frequent Flyers"
+    },
+    "260403_BIOHACKERS_Biohacker Lander_ALT*": {
+      "angle": "Biohacking"
+    },
+    "260403_GIFTGIVERS_Gift Lander_ALT*": {
+      "angle": "Gifting"
+    },
+    "260403_COUPLESANDPARTNERPAIR_Couple Lander_ALT*": {
+      "angle": "Family / Couples"
+    },
+    "260403_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
+      "angle": "Health Conditions"
+    },
+    "260403_SKEPTICALRESEARCHER_Research Lander_ALT*": {
+      "angle": "Supplement Skeptics"
+    },
+    "260403_ACTIVEAGER_Longevity Lander_ALT*": {
+      "angle": "Aging (General)"
+    },
+    "Health Condition Solution Seeker Winners + Potentials_ALT*": {
+      "angle": "Health Conditions"
+    },
+    "Supplement Skeptics (DRAMYSHAH#1 Most Vitamins Are Useless) Winners + Potentials_ALT*": {
+      "angle": "Supplement Skeptics"
     }
   },
   "notes": {
@@ -436,7 +469,10 @@
     "angles::Science": "Scale",
     "angles::Joint Health": "Scale",
     "angles::Medical Reovery": "Scale",
-    "landers::Mona Sharma": "Ambassador - Mona Sharma"
+    "landers::Mona Sharma": "Ambassador - Mona Sharma",
+    "angles::Weightloss": "0407_Scale",
+    "angles::Supplement Stackers": "0407_Scale",
+    "angles::Sleep": "0407_Scale"
   },
   "buckets": {
     "GLP-1": "X Reasons",
