@@ -260,6 +260,58 @@
     "260309 ACTIVE SENIOR (>45)_ALT*": {
       "angle": "Active Seniors",
       "lander": "Active Seniors"
+    },
+    "260402_BEAUTYFROMWITHIN_Beauty Lander_ALT*": {
+      "angle": "Hair, Skin & Nails",
+      "lander": "Beauty Lander"
+    },
+    "260402_MORNINGRITUALLOVER_MorningRitual Lander_ALT*": {
+      "angle": "Morning Ritual",
+      "lander": "Morning Ritual"
+    },
+    "260402_FREQUENTFLYERS_Travelers Lander_ALT*": {
+      "angle": "Frequent Flyers",
+      "lander": "Frequent Travellers"
+    },
+    "260402_BIOHACKERS_Biohacker Lander_ALT*": {
+      "angle": "Biohacking",
+      "lander": "Biohacking"
+    },
+    "260402_GIFTGIVERS_Gift Lander_ALT*": {
+      "angle": "Gifting",
+      "lander": "Gifting"
+    },
+    "260402_COUPLESANDPARTNERPAIR_Couple Lander_ALT*": {
+      "angle": "Couples & Family",
+      "lander": "Family / Couples"
+    },
+    "260402_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
+      "angle": "Health Conditions",
+      "lander": "Health"
+    },
+    "260402_SKEPTICALRESEARCHER_Research Lander_ALT*": {
+      "angle": "Supplement Skeptics",
+      "lander": "Research"
+    },
+    "260402_ACTIVEAGER_Longevity Lander_ALT*": {
+      "angle": "Aging - General",
+      "lander": "Longevity"
+    },
+    "260403 ANGLE 5: Supplement Skeptics (DRAMYSHAH#1-Most Vitamins Are Useless) _ALT*": {
+      "angle": "Supplement Skeptics",
+      "lander": "Dr Amy"
+    },
+    "260403 ANGLE 5: Supplement Skeptics(DRAMYSHAH#2-Why I Stopped Taking 12 Different Supplements) _ALT*": {
+      "angle": "Supplement Skeptics",
+      "lander": "Dr Amy"
+    },
+    "260403 ANGLE 10: Biohacking(MONASHARMA#1-Beyond the biohack)_ALT*": {
+      "angle": "Biohacking",
+      "lander": "Mona Sharma"
+    },
+    "260403 ANGLE 9: Medical Recovery(MONASHARMA#2-How i Survived 2 heart surgeries)_ALT*": {
+      "angle": "Medical Reovery",
+      "lander": "Mona Sharma"
     }
   },
   "notes": {
@@ -414,6 +466,15 @@
     "DrDawn": "Ambassador",
     "DrAra": "Ambassador",
     "AI Prompt Lander": "AI Prompt",
-    "Mona Sharma": "Ambassador"
+    "Mona Sharma": "Ambassador",
+    "Family / Couples": "Persona",
+    "Frequent Travellers": "Persona",
+    "Research": "Persona",
+    "Beauty Lander": "Persona",
+    "Health": "Persona",
+    "Gifting": "Persona",
+    "Biohacking": "Persona",
+    "Longevity": "Persona",
+    "Morning Ritual": "Persona"
   }
 }
