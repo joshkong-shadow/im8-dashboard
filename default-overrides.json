@@ -314,37 +314,47 @@
       "lander": "Mona Sharma"
     },
     "260403_BEAUTYFROMWITHIN_Beauty Lander_ALT*": {
-      "angle": "Beauty"
+      "angle": "Beauty",
+      "lander": "Beauty Lander"
     },
     "260403_MORNINGRITUALLOVER_MorningRitual Lander_ALT*": {
-      "angle": "Morning Ritual"
+      "angle": "Morning Ritual",
+      "lander": "Morning Ritual"
     },
     "260403_FREQUENTFLYERS_Travelers Lander_ALT*": {
-      "angle": "Frequent Flyers"
+      "angle": "Frequent Flyers",
+      "lander": "Frequent Flyers"
     },
     "260403_BIOHACKERS_Biohacker Lander_ALT*": {
-      "angle": "Biohacking"
+      "angle": "Biohacking",
+      "lander": "Biohacking"
     },
     "260403_GIFTGIVERS_Gift Lander_ALT*": {
-      "angle": "Gifting"
+      "angle": "Gifting",
+      "lander": "Gifting"
     },
     "260403_COUPLESANDPARTNERPAIR_Couple Lander_ALT*": {
-      "angle": "Family / Couples"
+      "angle": "Family / Couples",
+      "lander": "Family / Couples"
     },
     "260403_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
-      "angle": "Health Conditions"
+      "angle": "Health Conditions",
+      "lander": "General Health"
     },
     "260403_SKEPTICALRESEARCHER_Research Lander_ALT*": {
-      "angle": "Supplement Skeptics"
+      "angle": "Supplement Skeptics",
+      "lander": "Research Lander"
     },
     "260403_ACTIVEAGER_Longevity Lander_ALT*": {
-      "angle": "Aging (General)"
+      "angle": "Aging (General)",
+      "lander": "Aging (General)"
     },
     "Health Condition Solution Seeker Winners + Potentials_ALT*": {
       "angle": "Health Conditions"
     },
     "Supplement Skeptics (DRAMYSHAH#1 Most Vitamins Are Useless) Winners + Potentials_ALT*": {
-      "angle": "Supplement Skeptics"
+      "angle": "Supplement Skeptics",
+      "lander": "Dr Amy"
     }
   },
   "notes": {
