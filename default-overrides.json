@@ -481,8 +481,12 @@
     "angles::Medical Reovery": "Scale",
     "landers::Mona Sharma": "Ambassador - Mona Sharma",
     "angles::Weightloss": "0407_Scale",
-    "angles::Supplement Stackers": "0407_Scale",
-    "angles::Sleep": "0407_Scale"
+    "angles::Sleep": "Scale",
+    "angles::Aging - General": "0407_Scale",
+    "angles::Pill Fatigue (Supp Stackers)": "0407_Scale",
+    "angles::Gifting": "0407_Scale",
+    "angles::Biohacking": "0407_Scale",
+    "angles::Frequent Flyers": "0407_Scale"
   },
   "buckets": {
     "GLP-1": "X Reasons",
