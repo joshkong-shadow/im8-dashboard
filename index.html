@@ -597,7 +597,7 @@ function Dashboard(){
   },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
 
   // Gold Mine: >10 purchases AND >1.0x ROAS in 7-day window
-  const goldMineAds=useMemo(()=>adD.filter(r=>r.w7&&r.w7.p>10&&r.w7.roas>1.0).sort((a,b)=>(b.w7?.roas||0)-(a.w7?.roas||0)),[adD]);
+  const goldMineAds=useMemo(()=>adD.filter(r=>r.w7&&r.w7.p>10&&r.w7.roas>1.0).sort((a,b)=>(b.d2?.roas||0)-(a.d2?.roas||0)),[adD]);
   // Volume Scaler: >$1k average daily spend in current period
   const curDays=useMemo(()=>{const d1=new Date(curFrom+'T12:00:00'),d2=new Date(curTo+'T12:00:00');return Math.max(1,Math.round((d2-d1)/(86400000))+1);},[curFrom,curTo]);
   const volumeAds=useMemo(()=>adD.filter(r=>r.d2&&(r.d2.s/curDays)>=1000).sort((a,b)=>b.d2.s-a.d2.s),[adD,curDays]);
