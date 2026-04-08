@@ -634,6 +634,28 @@ function Dashboard(){
     else alert('No preview available for this ad.');
   },[config,creatives]);
 
+  // CSV export for ad reports
+  const exportCSV=useCallback(async(adList,filename)=>{
+    // Fetch preview links for all ads in the list
+    const ids=adList.map(a=>a.adId).filter(Boolean);
+    let cr={...creatives};
+    const missing=ids.filter(id=>!cr[id]);
+    if(missing.length>0&&config){
+      try{cr=await fetchAdCreatives(config.token,[...new Set(missing)]);setCreatives(cr);}catch(e){}
+    }
+    const esc=v=>{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;};
+    const hdr=['Ad Name','Preview Link','Spend','Purchases','ROAS','CPA','ATC%','CVR%','Persona','Format'];
+    const rows=adList.map(r=>{
+      const link=cr[r.adId]?.preview||'';
+      return[r.n,link,r.d2?.s!=null?r.d2.s.toFixed(2):'',r.d2?.p!=null?Math.round(r.d2.p):'',r.d2?.roas!=null?r.d2.roas.toFixed(2):'',r.d2?.cpa!=null?r.d2.cpa.toFixed(2):'',r.d2?.atc!=null?r.d2.atc.toFixed(1):'',r.d2?.cvr!=null?r.d2.cvr.toFixed(2):'',r.persona||'',r.format||''].map(esc);
+    });
+    const csv=[hdr.join(','),...rows.map(r=>r.join(','))].join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=filename+'.csv';a.click();
+    URL.revokeObjectURL(url);
+  },[config,creatives]);
+
   const allPersonas=useMemo(()=>[...new Set(adD.map(a=>a.persona))].sort(),[adD]);
   const allFormats=useMemo(()=>[...new Set(adD.map(a=>a.format))].sort(),[adD]);
 
@@ -1248,7 +1270,10 @@ function Dashboard(){
 
       // ── GOLD MINE TABLE ──
       React.createElement('div',{id:'goldmine-table',style:{marginBottom:24}},
-        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#fbbf24',marginBottom:8}},'\u26CF Gold Mine Report — Detail'),
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+          React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#fbbf24'}},'\u26CF Gold Mine Report — Detail'),
+          goldMineAds.length>0&&React.createElement('button',{onClick:()=>exportCSV(goldMineAds,'gold-mine-report-'+curFrom),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'4px 12px',color:'#e2e8f0',fontSize:11,fontWeight:600,cursor:'pointer'}},'\u2B07 Export CSV')
+        ),
         goldMineAds.length===0
           ? React.createElement('div',{style:{color:'#64748b',fontSize:12,padding:16}},'No ads qualify yet. Need >10 purchases & >1.0x ROAS in the 7-day window.')
           : React.createElement('div',{style:{overflowX:'auto'}},
@@ -1300,7 +1325,10 @@ function Dashboard(){
 
       // ── VOLUME SCALER TABLE ──
       React.createElement('div',{id:'volume-table',style:{marginBottom:24}},
-        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#3b82f6',marginBottom:8}},'\u26A1 Volume Scaler Report — Detail'),
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+          React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#3b82f6'}},'\u26A1 Volume Scaler Report — Detail'),
+          volumeAds.length>0&&React.createElement('button',{onClick:()=>exportCSV(volumeAds,'volume-scaler-report-'+curFrom),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'4px 12px',color:'#e2e8f0',fontSize:11,fontWeight:600,cursor:'pointer'}},'\u2B07 Export CSV')
+        ),
         volumeAds.length===0
           ? React.createElement('div',{style:{color:'#64748b',fontSize:12,padding:16}},'No ads with >$1k average daily spend in the current period.')
           : React.createElement('div',{style:{overflowX:'auto'}},
