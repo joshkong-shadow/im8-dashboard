@@ -642,7 +642,7 @@ function Dashboard(){
     return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To)})).sort((a,b)=>b.tot.s-a.tot.s);
   },[drillDown,ads,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
-  const fl=d=>d.filter(r=>{if(r.tot.s<fms)return false;if(fr==="above"&&r.tot.roas<0.95)return false;if(fr==="below"&&r.tot.roas>=0.7)return false;if(fr==="watch"&&(r.tot.roas<0.7||r.tot.roas>=0.95))return false;return true;});
+  const fl=d=>d.filter(r=>{if(!r.d2||r.d2.s===0)return false;if(r.tot.s<fms)return false;if(fr==="above"&&r.tot.roas<0.95)return false;if(fr==="below"&&r.tot.roas>=0.7)return false;if(fr==="watch"&&(r.tot.roas<0.7||r.tot.roas>=0.95))return false;return true;});
 
   const allA=useMemo(()=>[...new Set(ads.map(a=>a.angle))].sort(),[ads]);
   const allL=useMemo(()=>[...new Set(ads.map(a=>a.lander))].sort(),[ads]);
