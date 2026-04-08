@@ -439,6 +439,10 @@ function Dashboard(){
   const[error,setError]=useState('');
   const[ep,setEp]=useState(null);
   const[adTagging,setAdTagging]=useState(null); // ad name being tagged
+  const[adLoading,setAdLoading]=useState(false);
+  const[adFetched,setAdFetched]=useState(false); // tracks if ads have been fetched for current date range
+  const[goldMineLimit,setGoldMineLimit]=useState(25);
+  const[volumeLimit,setVolumeLimit]=useState(25);
   const[campDrill,setCampDrill]=useState(null);
   const[drillDown,setDrillDown]=useState(null); // {type:'angle'|'lander', name:'...'}
 
@@ -497,28 +501,7 @@ function Dashboard(){
       });
       setAdsetRaw(adsetParsed);
 
-      // Fetch ad-level insights
-      const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
-      const adParsed=adData.map(r=>{
-        const parsed=parseMetaRow(r);
-        return{
-          adId: r.ad_id||'',
-          name: r.ad_name||'Unknown',
-          adset: r.adset_name||'',
-          campaign: r.campaign_name||'',
-          day: r.date_start,
-          spend:parsed.spend, purch:parsed.purchases, rev:parsed.revenue, atc:parsed.atc, lpv:parsed.lpv,
-        };
-      });
-      setAdLevelRaw(adParsed);
-
-      // Fetch creative thumbnails in background (non-blocking)
-      const uniqueAdIds=[...new Set(adParsed.map(r=>r.adId).filter(Boolean))];
-      if(uniqueAdIds.length>0){
-        fetchAdCreatives(config.token,uniqueAdIds).then(cr=>setCreatives(cr)).catch(()=>{});
-      }
-
-      // Cache the fetch
+      // Cache the fetch (ad-level is lazy-loaded separately)
       const cacheKey = `${curFrom}_${curTo}_${priFrom}_${priTo}`;
       const history = LS.get('history',{});
       history[cacheKey] = {campaigns:campParsed,adsets:adsetParsed,ads:adParsed,fetchedAt:new Date().toISOString()};
@@ -538,6 +521,37 @@ function Dashboard(){
     }
     setLoading(false);
   },[config,curFrom,curTo,priFrom,priTo,w7From]);
+
+  // Lazy fetch ad-level data (only when Ads tab is opened)
+  const fetchAdData=useCallback(async()=>{
+    if(!config||adLoading)return;
+    setAdLoading(true);
+    const allDates=[curFrom,curTo,priFrom,priTo,w7From];
+    const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
+    const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
+    try{
+      const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
+      const adParsed=adData.map(r=>{
+        const parsed=parseMetaRow(r);
+        return{
+          adId: r.ad_id||'',
+          name: r.ad_name||'Unknown',
+          adset: r.adset_name||'',
+          campaign: r.campaign_name||'',
+          day: r.date_start,
+          spend:parsed.spend, purch:parsed.purchases, rev:parsed.revenue, atc:parsed.atc, lpv:parsed.lpv,
+        };
+      });
+      setAdLevelRaw(adParsed);
+      setAdFetched(true);
+    }catch(e){setError('Ad fetch: '+e.message);}
+    setAdLoading(false);
+  },[config,curFrom,curTo,priFrom,priTo,w7From,adLoading]);
+
+  // Trigger ad fetch when Ads tab is selected
+  useEffect(()=>{if(tab==='ads'&&config&&!adFetched&&!adLoading)fetchAdData();},[tab,config,adFetched,adLoading]);
+  // Reset adFetched + pagination when date range changes
+  useEffect(()=>{setAdFetched(false);setAdLevelRaw([]);setGoldMineLimit(25);setVolumeLimit(25);},[curFrom,curTo,priFrom,priTo]);
 
   // Auto-fetch on config load or date change
   useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
@@ -619,6 +633,16 @@ function Dashboard(){
   const volumeFmts=useMemo(()=>formatBreakdown(volumeAds),[volumeAds,adLevelRaw]);
 
   // All persona/format options for tagging
+  // Fetch thumbnails only for ads visible in Gold Mine + Volume Scaler tables
+  useEffect(()=>{
+    if(!config||!adFetched)return;
+    const visibleAds=[...goldMineAds.slice(0,goldMineLimit),...volumeAds.slice(0,volumeLimit)];
+    const needIds=visibleAds.map(a=>a.adId).filter(id=>id&&!creatives[id]);
+    if(needIds.length>0){
+      fetchAdCreatives(config.token,[...new Set(needIds)]).then(cr=>setCreatives(cr)).catch(()=>{});
+    }
+  },[adFetched,goldMineAds,volumeAds,goldMineLimit,volumeLimit]);
+
   const allPersonas=useMemo(()=>[...new Set(adD.map(a=>a.persona))].sort(),[adD]);
   const allFormats=useMemo(()=>[...new Set(adD.map(a=>a.format))].sort(),[adD]);
 
@@ -839,7 +863,7 @@ function Dashboard(){
     // ═══ ADS TAB ═══════════════════════════════════════════════════════════════
     tab==='ads'&&React.createElement('div',null,
       // Loading state for ads tab
-      loading&&adLevelRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+      adLoading&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
         React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
         'Fetching ad-level data from Meta...'
       ),
@@ -954,7 +978,7 @@ function Dashboard(){
                   React.createElement('th',{style:{...S.th,minWidth:80}},'Persona'),
                   React.createElement('th',{style:{...S.th,minWidth:80}},'Format')
                 )),
-                React.createElement('tbody',null,goldMineAds.map((r,i)=>{
+                React.createElement('tbody',null,goldMineAds.slice(0,goldMineLimit).map((r,i)=>{
                   const cr=creatives[r.adId]||{};
                   return React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425',cursor:'pointer'},onClick:()=>setAdTagging(adTagging===r.n?null:r.n)},
                     React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
@@ -980,7 +1004,10 @@ function Dashboard(){
                   );
                 }))
               )
-            )
+            ),
+          goldMineAds.length>goldMineLimit&&React.createElement('div',{style:{textAlign:'center',padding:'12px 0'}},
+            React.createElement('button',{onClick:()=>setGoldMineLimit(l=>l+25),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:6,padding:'8px 24px',color:'#e2e8f0',fontSize:12,fontWeight:600,cursor:'pointer'}},'Show more ('+Math.min(25,goldMineAds.length-goldMineLimit)+' of '+(goldMineAds.length-goldMineLimit)+' remaining)')
+          )
       ),
 
       // ── VOLUME SCALER TABLE ──
@@ -1003,7 +1030,7 @@ function Dashboard(){
                   React.createElement('th',{style:{...S.th,minWidth:80}},'Persona'),
                   React.createElement('th',{style:{...S.th,minWidth:80}},'Format')
                 )),
-                React.createElement('tbody',null,volumeAds.map((r,i)=>{
+                React.createElement('tbody',null,volumeAds.slice(0,volumeLimit).map((r,i)=>{
                   const cr=creatives[r.adId]||{};
                   return React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425',cursor:'pointer'},onClick:()=>setAdTagging(adTagging===r.n?null:r.n)},
                     React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
@@ -1029,7 +1056,10 @@ function Dashboard(){
                   );
                 }))
               )
-            )
+            ),
+          volumeAds.length>volumeLimit&&React.createElement('div',{style:{textAlign:'center',padding:'12px 0'}},
+            React.createElement('button',{onClick:()=>setVolumeLimit(l=>l+25),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:6,padding:'8px 24px',color:'#e2e8f0',fontSize:12,fontWeight:600,cursor:'pointer'}},'Show more ('+Math.min(25,volumeAds.length-volumeLimit)+' of '+(volumeAds.length-volumeLimit)+' remaining)')
+          )
       ),
 
       React.createElement('div',{style:{marginTop:14,fontSize:10,color:'#334155'}},'ROAS=\u03A3rev/\u03A3spend | CPA=\u03A3spend/\u03A3purch | CVR=\u03A3purch/\u03A3LPV | Gold Mine = >10 purch & >1.0x ROAS in 7d | Volume = >$1k avg daily spend')
