@@ -339,7 +339,7 @@
     },
     "260403_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
       "angle": "Health Conditions",
-      "lander": "General Health"
+      "lander": "MIXED"
     },
     "260403_SKEPTICALRESEARCHER_Research Lander_ALT*": {
       "angle": "Supplement Skeptics",
@@ -347,14 +347,21 @@
     },
     "260403_ACTIVEAGER_Longevity Lander_ALT*": {
       "angle": "Aging (General)",
-      "lander": "Aging (General)"
+      "lander": "Aging > 45"
     },
     "Health Condition Solution Seeker Winners + Potentials_ALT*": {
-      "angle": "Health Conditions"
+      "angle": "Health Conditions",
+      "lander": "MIXED"
     },
     "Supplement Skeptics (DRAMYSHAH#1 Most Vitamins Are Useless) Winners + Potentials_ALT*": {
       "angle": "Supplement Skeptics",
       "lander": "Dr Amy"
+    },
+    "260407 GLP-1#3 (NER STATICS)_ALT*": {
+      "lander": "GLP-1"
+    },
+    "260407 GLP-1#4 (NER STATICS)_ALT*": {
+      "lander": "GLP-1"
     }
   },
   "notes": {
@@ -486,7 +493,18 @@
     "angles::Pill Fatigue (Supp Stackers)": "0407_Scale",
     "angles::Gifting": "0407_Scale",
     "angles::Biohacking": "0407_Scale",
-    "angles::Frequent Flyers": "0407_Scale"
+    "angles::Frequent Flyers": "0407_Scale",
+    "landers::Frequent Flyers": "Persona - /travelers",
+    "landers::Family / Couples": "Persona - /couples",
+    "landers::AI Prompt Lander": "AI Prompt",
+    "landers::Research Lander": "Persona - /research",
+    "landers::Beauty Lander": "Persona - /beauty",
+    "landers::Gifting": "Persona - /gift-givers",
+    "landers::MIXED": "Mixed",
+    "landers::Biohacking": "Persona - /biohackers",
+    "landers::Morning Ritual": "Persona - /morning-ritual",
+    "landers::Aging (General)": "Persona - /longevity",
+    "landers::Aging > 45": "Persona - /longevity"
   },
   "buckets": {
     "GLP-1": "X Reasons",
@@ -529,6 +547,7 @@
     "Aging (General)": "Persona",
     "General Health": "Persona",
     "Research Lander": "Persona",
-    "Frequent Flyers": "Persona"
+    "Frequent Flyers": "Persona",
+    "Aging > 45": "Persona"
   }
 }
