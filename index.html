@@ -60,10 +60,12 @@ let DEFAULT_OVERRIDES_PROMISE = fetch('./default-overrides.json').then(r=>r.ok?r
 const META_API = 'https://graph.facebook.com/v21.0';
 
 async function fetchInsights(token, accountId, level, dateFrom, dateTo){
-  // level = 'campaign' or 'adset'
+  // level = 'campaign', 'adset', or 'ad'
   const fields = level === 'campaign'
     ? 'campaign_name,spend,actions,action_values,reach,frequency'
-    : 'adset_name,campaign_name,spend,actions,action_values,reach,frequency';
+    : level === 'adset'
+    ? 'adset_name,campaign_name,spend,actions,action_values,reach,frequency'
+    : 'ad_id,ad_name,adset_name,campaign_name,spend,actions,action_values,reach,frequency';
 
   let allData = [];
   let url = `${META_API}/act_${accountId}/insights?` + new URLSearchParams({
@@ -107,6 +109,34 @@ function parseMetaRow(row){
     atc: getAction(actions, 'add_to_cart'),
     lpv: getAction(actions, 'landing_page_view'),
   };
+}
+
+// ═══ CREATIVE THUMBNAILS ════════════════════════════════════════════════════
+async function fetchAdCreatives(token, adIds){
+  const cached = LS.get('creatives',{});
+  const needed = adIds.filter(id=>!cached[id]);
+  // Batch in groups of 50 using ?ids= batch endpoint
+  for(let i=0;i<needed.length;i+=50){
+    const batch=needed.slice(i,i+50);
+    const url=`${META_API}/?ids=${batch.join(',')}&fields=creative{thumbnail_url,image_url,effective_object_story_id}&access_token=${token}`;
+    try{
+      const resp=await fetch(url);
+      if(resp.ok){
+        const json=await resp.json();
+        for(const[adId,data] of Object.entries(json)){
+          const c=data.creative||{};
+          cached[adId]={
+            thumb:c.thumbnail_url||c.image_url||null,
+            preview:c.effective_object_story_id?'https://www.facebook.com/'+c.effective_object_story_id:null,
+          };
+        }
+      }
+    }catch(e){console.error('Creative fetch error:',e);}
+  }
+  // Cache missing ones as empty so we don't re-fetch
+  for(const id of needed){if(!cached[id])cached[id]={thumb:null,preview:null};}
+  LS.set('creatives',cached);
+  return cached;
 }
 
 // ═══ AUTO-DETECT RULES ══════════════════════════════════════════════════════
@@ -245,6 +275,31 @@ function AdsetEditor({name,currentCat,options,type,overrides,onSave}){
   );
 }
 
+// ═══ AD TAG SELECT ═════════════════════════════════════════════════════════
+function AdTagSelect({name,field,options,overrides,onSave}){
+  const[creating,setCreating]=useState(false);
+  const[nn,setNn]=useState("");
+  const current=overrides[name]?.[field]||'Untagged';
+  const assign=val=>{
+    const nx={...overrides};
+    if(!nx[name])nx[name]={};
+    if(val==='Untagged'){delete nx[name][field];if(Object.keys(nx[name]).length===0)delete nx[name];}
+    else nx[name][field]=val;
+    onSave(nx);setCreating(false);setNn("");
+  };
+  return creating
+    ? React.createElement('div',{style:{display:'flex',gap:6}},
+        React.createElement('input',{autoFocus:true,value:nn,onChange:e=>setNn(e.target.value),onKeyDown:e=>{if(e.key==='Enter'&&nn.trim())assign(nn.trim());if(e.key==='Escape'){setCreating(false);setNn('');}},placeholder:'New '+field+'...',style:{flex:1,background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'6px 8px',color:'#e2e8f0',fontSize:12,outline:'none'}}),
+        React.createElement('button',{onClick:()=>{if(nn.trim())assign(nn.trim());},style:{background:'#1e40af',border:'none',color:'#e2e8f0',borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:11,fontWeight:600}},'Save'),
+        React.createElement('button',{onClick:()=>{setCreating(false);setNn('');},style:{background:'#1e293b',border:'none',color:'#94a3b8',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:11}},'X')
+      )
+    : React.createElement('select',{value:current,onChange:e=>{if(e.target.value==='__NEW__'){setCreating(true);return;}assign(e.target.value);},style:{width:'100%',background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'8px 10px',color:'#e2e8f0',fontSize:12,outline:'none',cursor:'pointer'}},
+        React.createElement('option',{value:'Untagged'},'Untagged'),
+        options.filter(o=>o!=='Untagged').map(o=>React.createElement('option',{key:o,value:o},o)),
+        React.createElement('option',{value:'__NEW__'},'+ Create new...')
+      );
+}
+
 // ═══ SETTINGS SCREEN ════════════════════════════════════════════════════════
 function Settings({onSave,initial}){
   const cfg=initial||{};
@@ -378,9 +433,12 @@ function Dashboard(){
   },[ov,notes,buckets]);
   const[campRaw,setCampRaw]=useState([]);
   const[adsetRaw,setAdsetRaw]=useState([]);
+  const[adLevelRaw,setAdLevelRaw]=useState([]);
+  const[creatives,setCreatives]=useState(()=>LS.get('creatives',{}));
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState('');
   const[ep,setEp]=useState(null);
+  const[adTagging,setAdTagging]=useState(null); // ad name being tagged
   const[campDrill,setCampDrill]=useState(null);
   const[drillDown,setDrillDown]=useState(null); // {type:'angle'|'lander', name:'...'}
 
@@ -439,10 +497,32 @@ function Dashboard(){
       });
       setAdsetRaw(adsetParsed);
 
+      // Fetch ad-level insights
+      const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
+      const adParsed=adData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>{
+        const parsed=parseMetaRow(r);
+        return{
+          adId: r.ad_id||'',
+          name: r.ad_name||'Unknown',
+          adset: r.adset_name||'',
+          campaign: r.campaign_name||'',
+          day: r.date_start,
+          spend:parsed.spend, purch:parsed.purchases, rev:parsed.revenue, atc:parsed.atc, lpv:parsed.lpv,
+        };
+      });
+      setAdLevelRaw(adParsed);
+
+      // Fetch creative thumbnails for unique ad IDs
+      const uniqueAdIds=[...new Set(adParsed.map(r=>r.adId).filter(Boolean))];
+      if(uniqueAdIds.length>0){
+        const cr=await fetchAdCreatives(config.token,uniqueAdIds);
+        setCreatives(cr);
+      }
+
       // Cache the fetch
       const cacheKey = `${curFrom}_${curTo}_${priFrom}_${priTo}`;
       const history = LS.get('history',{});
-      history[cacheKey] = {campaigns:campParsed,adsets:adsetParsed,fetchedAt:new Date().toISOString()};
+      history[cacheKey] = {campaigns:campParsed,adsets:adsetParsed,ads:adParsed,fetchedAt:new Date().toISOString()};
       LS.set('history',history);
       setLastFetch(new Date().toLocaleTimeString());
     }catch(e){
@@ -453,6 +533,7 @@ function Dashboard(){
       if(history[cacheKey]){
         setCampRaw(history[cacheKey].campaigns);
         setAdsetRaw(history[cacheKey].adsets);
+        if(history[cacheKey].ads)setAdLevelRaw(history[cacheKey].ads);
         setError(e.message + ' (showing cached data)');
       }
     }
@@ -504,6 +585,43 @@ function Dashboard(){
     return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To),cnt:campAdsetCounts[n]||0})).sort((a,b)=>b.tot.s-a.tot.s);
   },[campRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,campAdsetCounts]);
 
+  // Ad-level aggregation
+  const adD=useMemo(()=>{
+    const g={};
+    for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    return Object.entries(g).map(([n,rows])=>{
+      const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      const adId=rows[0]?.adId||'';
+      const o=ov[n]||{};
+      return{n,adId,...agg,persona:o.persona||'Untagged',format:o.format||'Untagged'};
+    });
+  },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
+
+  // Gold Mine: >10 purchases AND >1.0x ROAS in 7-day window
+  const goldMineAds=useMemo(()=>adD.filter(r=>r.w7&&r.w7.p>10&&r.w7.roas>1.0).sort((a,b)=>(b.w7?.roas||0)-(a.w7?.roas||0)),[adD]);
+  // Volume Scaler: >$1k total spend
+  const volumeAds=useMemo(()=>adD.filter(r=>r.tot.s>=1000).sort((a,b)=>b.tot.s-a.tot.s),[adD]);
+
+  // Format breakdowns for summaries
+  const formatBreakdown=(adList)=>{
+    const g={};
+    for(const ad of adList){
+      const fmt=ad.format||'Untagged';
+      if(!g[fmt])g[fmt]={ads:0,s:0,p:0,r:0,a:0,l:0};
+      g[fmt].ads++;g[fmt].s+=ad.tot.s;g[fmt].p+=ad.tot.p;
+      // Sum revenue from raw data for ROAS calc
+      const rawRows=adLevelRaw.filter(r=>r.name===ad.n);
+      for(const rr of rawRows){g[fmt].r+=rr.rev;g[fmt].a+=rr.atc;g[fmt].l+=rr.lpv;}
+    }
+    return Object.entries(g).map(([n,v])=>({n,ads:v.ads,s:v.s,p:v.p,roas:v.s>0?v.r/v.s:0,cpa:v.p>0?v.s/v.p:null,atc:v.l>0?v.a/v.l*100:0,cvr:v.l>0?v.p/v.l*100:0})).sort((a,b)=>b.s-a.s);
+  };
+  const goldMineFmts=useMemo(()=>formatBreakdown(goldMineAds),[goldMineAds,adLevelRaw]);
+  const volumeFmts=useMemo(()=>formatBreakdown(volumeAds),[volumeAds,adLevelRaw]);
+
+  // All persona/format options for tagging
+  const allPersonas=useMemo(()=>[...new Set(adD.map(a=>a.persona))].sort(),[adD]);
+  const allFormats=useMemo(()=>[...new Set(adD.map(a=>a.format))].sort(),[adD]);
+
   // Campaign drill-down: adsets belonging to clicked campaign
   const campDrillData=useMemo(()=>{
     if(!campDrill)return[];
@@ -532,7 +650,7 @@ function Dashboard(){
 
   if(!config) return React.createElement(Settings,{onSave:handleConfigSave,initial:LS.get('config',{})});
 
-  const data=tab==="campaigns"?fl(campD):tab==="angles"?fl(angD):fl(lnD);
+  const data=tab==="campaigns"?fl(campD):tab==="angles"?fl(angD):tab==="landers"?fl(lnD):[];
   const tS=data.reduce((a,c)=>a+c.tot.s,0);
   const tP=data.reduce((a,c)=>a+c.tot.p,0);
 
@@ -576,13 +694,13 @@ function Dashboard(){
 
     // Tabs
     React.createElement('div',{style:{display:'flex',gap:2,marginBottom:12,borderBottom:'1px solid #1e293b',overflowX:'auto'}},
-      [{id:'campaigns',l:'Campaigns'},{id:'angles',l:'Ad Angles / Personas'},{id:'landers',l:'Landing Pages'}].map(t=>
+      [{id:'campaigns',l:'Campaigns'},{id:'angles',l:'Ad Angles / Personas'},{id:'landers',l:'Landing Pages'},{id:'ads',l:'Ads'}].map(t=>
         React.createElement('button',{key:t.id,onClick:()=>{setTab(t.id);setEp(null);},style:{padding:'10px 14px',border:'none',cursor:'pointer',background:'transparent',whiteSpace:'nowrap',borderBottom:tab===t.id?'2px solid #3b82f6':'2px solid transparent',color:tab===t.id?'#e2e8f0':'#64748b',fontSize:13,fontWeight:600}},t.l)
       )
     ),
 
-    // Filters
-    React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
+    // Filters (not on ads tab)
+    tab!=='ads'&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
       React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'Min Spend'),
       [0,100,500,1000,5000].map(v=>React.createElement('button',{key:v,onClick:()=>setFms(v),style:S.btn(fms===v)},v===0?'All':'$'+v.toLocaleString()+'+')),
       React.createElement('div',{style:{width:1,height:18,background:'#1e293b'}}),
@@ -591,8 +709,8 @@ function Dashboard(){
       React.createElement('span',{style:{fontSize:11,color:'#475569',marginLeft:'auto'}},data.length+' rows | $'+Math.round(tS).toLocaleString()+' | '+tP+' purch'),
     ),
 
-    // Legend
-    React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
+    // Legend (not on ads tab)
+    tab!=='ads'&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
       'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
       ') | Below = Prior (',React.createElement('b',{style:{color:'#475569'}},d1Label),')',
       ' | [Brackets] = 7d (',React.createElement('b',{style:{color:'#586880'}},w7Label),')',
@@ -601,13 +719,13 @@ function Dashboard(){
       lastFetch&&React.createElement('span',{style:{marginLeft:12}},'Last fetch: '+lastFetch)
     ),
 
-    // Loading state
-    loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+    // Loading state (not on ads tab for this block)
+    tab!=='ads'&&loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
       React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
       'Fetching data from Meta...'
     ),
 
-    // Bucket summary (Landing Pages tab only)
+    // Bucket summary (Landing Pages tab only, hidden on ads tab)
     tab==='landers'&&bucketD.length>0&&React.createElement('div',{style:{marginBottom:16}},
       React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#94a3b8',marginBottom:8,textTransform:'uppercase',letterSpacing:'0.5px'}},'Bucket Summary'),
       React.createElement('div',{style:{overflowX:'auto'}},
@@ -640,8 +758,8 @@ function Dashboard(){
       )
     ),
 
-    // Table
-    !loading||campRaw.length>0?React.createElement('div',{style:{overflowX:'auto'}},
+    // Table (not on ads tab)
+    tab!=='ads'&&(!loading||campRaw.length>0)?React.createElement('div',{style:{overflowX:'auto'}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
         React.createElement('thead',null,React.createElement('tr',null,
           React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
@@ -717,6 +835,234 @@ function Dashboard(){
         ))
       )
     ):null,
+
+    // ═══ ADS TAB ═══════════════════════════════════════════════════════════════
+    tab==='ads'&&React.createElement('div',null,
+      // Loading state for ads tab
+      loading&&adLevelRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+        React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
+        'Fetching ad-level data from Meta...'
+      ),
+
+      // Legend
+      React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:12}},
+        'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
+        ') | Below = Prior (',React.createElement('b',{style:{color:'#475569'}},d1Label),')',
+        ' | [Brackets] = 7d (',React.createElement('b',{style:{color:'#586880'}},w7Label),')',
+        ' | ',React.createElement('span',{style:{color:'#34d399'}},'Green'),' = improved | ',
+        React.createElement('span',{style:{color:'#f87171'}},'Red'),' = declined',
+        lastFetch&&React.createElement('span',{style:{marginLeft:12}},'Last fetch: '+lastFetch)
+      ),
+
+      // ── GOLD MINE REPORT SUMMARY ──
+      React.createElement('div',{style:{marginBottom:20}},
+        React.createElement('a',{href:'#goldmine-table',onClick:e=>{e.preventDefault();document.getElementById('goldmine-table')?.scrollIntoView({behavior:'smooth'});},style:{fontSize:16,fontWeight:700,color:'#fbbf24',cursor:'pointer',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:6}},
+          '\u26CF Gold Mine Report',
+          React.createElement('span',{style:{fontSize:11,color:'#94a3b8',fontWeight:500}},'('+goldMineAds.length+' ads — >10 purch & >1.0x ROAS in 7d)')
+        ),
+        // Aggregate stats
+        goldMineAds.length>0&&React.createElement('div',{style:{display:'flex',gap:20,marginTop:8,marginBottom:10}},
+          React.createElement('span',{style:{fontSize:12,color:'#94a3b8',...S.mono}},'Spend: $'+Math.round(goldMineAds.reduce((a,r)=>a+r.tot.s,0)).toLocaleString()),
+          React.createElement('span',{style:{fontSize:12,color:'#94a3b8',...S.mono}},'Purch: '+Math.round(goldMineAds.reduce((a,r)=>a+r.tot.p,0)).toLocaleString()),
+          React.createElement('span',{style:{fontSize:12,color:goldMineAds.reduce((a,r)=>a+r.tot.s,0)>0?(goldMineAds.reduce((a,r)=>a+(r.w7?.roas||0)*r.tot.s,0)/goldMineAds.reduce((a,r)=>a+r.tot.s,0))>=0.95?'#34d399':'#fbbf24':'#94a3b8',...S.mono}},'Avg ROAS: '+(goldMineAds.reduce((a,r)=>a+r.tot.s,0)>0?(goldMineAds.reduce((a,r)=>a+r.tot.s,0)>0?((()=>{const ts=goldMineAds.reduce((a,r)=>a+r.tot.s,0);const tr=goldMineAds.reduce((a,r)=>a+(adLevelRaw.filter(x=>x.name===r.n).reduce((s,x)=>s+x.rev,0)),0);return(tr/ts).toFixed(2);})()):'0')+'x':'N/A'))
+        ),
+        // Format breakdown table
+        goldMineFmts.length>0&&React.createElement('div',{style:{overflowX:'auto'}},
+          React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+            React.createElement('thead',null,React.createElement('tr',null,
+              React.createElement('th',{style:{...S.th,minWidth:120}},'Format'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'# Ads'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
+            )),
+            React.createElement('tbody',null,goldMineFmts.map((f,i)=>
+              React.createElement('tr',{key:f.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                React.createElement('td',{style:{...S.td,fontWeight:700,color:'#e2e8f0'}},f.n),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',...S.mono,fontSize:12}},f.ads),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},'$'+Math.round(f.s).toLocaleString()),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},Math.round(f.p).toLocaleString()),
+                React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement('span',{style:{background:f.roas>=0.95?'#06261a':f.roas>=0.7?'#26230a':'#260a0a',color:f.roas>=0.95?'#34d399':f.roas>=0.7?'#fbbf24':'#f87171',padding:'2px 6px',borderRadius:3,...S.mono,fontSize:13,fontWeight:600}},f.roas.toFixed(2)+'x')),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},f.cpa!=null?'$'+Math.round(f.cpa).toLocaleString():'\u2014'),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},f.atc.toFixed(1)+'%'),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},f.cvr.toFixed(2)+'%')
+              )
+            ))
+          )
+        )
+      ),
+
+      // ── VOLUME SCALER REPORT SUMMARY ──
+      React.createElement('div',{style:{marginBottom:20}},
+        React.createElement('a',{href:'#volume-table',onClick:e=>{e.preventDefault();document.getElementById('volume-table')?.scrollIntoView({behavior:'smooth'});},style:{fontSize:16,fontWeight:700,color:'#3b82f6',cursor:'pointer',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:6}},
+          '\u26A1 Volume Scaler Report',
+          React.createElement('span',{style:{fontSize:11,color:'#94a3b8',fontWeight:500}},'('+volumeAds.length+' ads — >$1k spend)')
+        ),
+        volumeAds.length>0&&React.createElement('div',{style:{display:'flex',gap:20,marginTop:8,marginBottom:10}},
+          React.createElement('span',{style:{fontSize:12,color:'#94a3b8',...S.mono}},'Spend: $'+Math.round(volumeAds.reduce((a,r)=>a+r.tot.s,0)).toLocaleString()),
+          React.createElement('span',{style:{fontSize:12,color:'#94a3b8',...S.mono}},'Purch: '+Math.round(volumeAds.reduce((a,r)=>a+r.tot.p,0)).toLocaleString()),
+          React.createElement('span',{style:{fontSize:12,color:'#94a3b8',...S.mono}},'Avg CPA: $'+(volumeAds.reduce((a,r)=>a+r.tot.p,0)>0?Math.round(volumeAds.reduce((a,r)=>a+r.tot.s,0)/volumeAds.reduce((a,r)=>a+r.tot.p,0)).toLocaleString():'N/A'))
+        ),
+        volumeFmts.length>0&&React.createElement('div',{style:{overflowX:'auto'}},
+          React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+            React.createElement('thead',null,React.createElement('tr',null,
+              React.createElement('th',{style:{...S.th,minWidth:120}},'Format'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'# Ads'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
+            )),
+            React.createElement('tbody',null,volumeFmts.map((f,i)=>
+              React.createElement('tr',{key:f.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                React.createElement('td',{style:{...S.td,fontWeight:700,color:'#e2e8f0'}},f.n),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',...S.mono,fontSize:12}},f.ads),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},'$'+Math.round(f.s).toLocaleString()),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},Math.round(f.p).toLocaleString()),
+                React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement('span',{style:{background:f.roas>=0.95?'#06261a':f.roas>=0.7?'#26230a':'#260a0a',color:f.roas>=0.95?'#34d399':f.roas>=0.7?'#fbbf24':'#f87171',padding:'2px 6px',borderRadius:3,...S.mono,fontSize:13,fontWeight:600}},f.roas.toFixed(2)+'x')),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},f.cpa!=null?'$'+Math.round(f.cpa).toLocaleString():'\u2014'),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},f.atc.toFixed(1)+'%'),
+                React.createElement('td',{style:{...S.td,textAlign:'right',color:'#e2e8f0',...S.mono,fontSize:13}},f.cvr.toFixed(2)+'%')
+              )
+            ))
+          )
+        )
+      ),
+
+      // ── GOLD MINE TABLE ──
+      React.createElement('div',{id:'goldmine-table',style:{marginBottom:24}},
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#fbbf24',marginBottom:8}},'\u26CF Gold Mine Report — Detail'),
+        goldMineAds.length===0
+          ? React.createElement('div',{style:{color:'#64748b',fontSize:12,padding:16}},'No ads qualify yet. Need >10 purchases & >1.0x ROAS in the 7-day window.')
+          : React.createElement('div',{style:{overflowX:'auto'}},
+              React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+                React.createElement('thead',null,React.createElement('tr',null,
+                  React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+                  React.createElement('th',{style:{...S.th,width:48}},''),
+                  React.createElement('th',{style:{...S.th,minWidth:170}},'Ad Name'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+                  React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%'),
+                  React.createElement('th',{style:{...S.th,minWidth:80}},'Persona'),
+                  React.createElement('th',{style:{...S.th,minWidth:80}},'Format')
+                )),
+                React.createElement('tbody',null,goldMineAds.map((r,i)=>{
+                  const cr=creatives[r.adId]||{};
+                  return React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425',cursor:'pointer'},onClick:()=>setAdTagging(adTagging===r.n?null:r.n)},
+                    React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
+                    React.createElement('td',{style:{...S.td,padding:'4px 6px'}},
+                      cr.thumb
+                        ? React.createElement('a',{href:cr.preview||'#',target:'_blank',rel:'noopener',onClick:e=>e.stopPropagation()},
+                            React.createElement('img',{src:cr.thumb,style:{width:40,height:40,borderRadius:4,objectFit:'cover',display:'block'},onError:e=>{e.target.style.display='none';}})
+                          )
+                        : React.createElement('div',{style:{width:40,height:40,borderRadius:4,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#475569'}},'\uD83D\uDDBC')
+                    ),
+                    React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:250}},
+                      React.createElement('div',{style:{wordBreak:'break-word',lineHeight:1.3,fontSize:12}},r.n),
+                      cr.preview&&React.createElement('a',{href:cr.preview,target:'_blank',rel:'noopener',onClick:e=>e.stopPropagation(),style:{fontSize:10,color:'#3b82f6',textDecoration:'none'}},'Preview \u2197')
+                    ),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,w7:r.w7?.s,format:'$'})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,w7:r.w7?.p,format:'n'})),
+                    React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:r.d2?.roas,prev:r.d1?.roas,w7:r.w7?.roas,format:'x',isRoas:true})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cpa,prev:r.d1?.cpa,w7:r.w7?.cpa,format:'$',invert:true})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.atc,prev:r.d1?.atc,w7:r.w7?.atc,format:'%'})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cvr,prev:r.d1?.cvr,w7:r.w7?.cvr,format:'cvr'})),
+                    React.createElement('td',{style:{...S.td}},React.createElement('span',{style:{fontSize:10,fontWeight:600,color:r.persona!=='Untagged'?'#a78bfa':'#475569',background:r.persona!=='Untagged'?'#1e1640':'transparent',padding:'2px 6px',borderRadius:3}},r.persona)),
+                    React.createElement('td',{style:{...S.td}},React.createElement('span',{style:{fontSize:10,fontWeight:600,color:r.format!=='Untagged'?'#38bdf8':'#475569',background:r.format!=='Untagged'?'#0c1e3a':'transparent',padding:'2px 6px',borderRadius:3}},r.format))
+                  );
+                }))
+              )
+            )
+      ),
+
+      // ── VOLUME SCALER TABLE ──
+      React.createElement('div',{id:'volume-table',style:{marginBottom:24}},
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#3b82f6',marginBottom:8}},'\u26A1 Volume Scaler Report — Detail'),
+        volumeAds.length===0
+          ? React.createElement('div',{style:{color:'#64748b',fontSize:12,padding:16}},'No ads with >$1k spend in the selected period.')
+          : React.createElement('div',{style:{overflowX:'auto'}},
+              React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+                React.createElement('thead',null,React.createElement('tr',null,
+                  React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+                  React.createElement('th',{style:{...S.th,width:48}},''),
+                  React.createElement('th',{style:{...S.th,minWidth:170}},'Ad Name'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+                  React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+                  React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%'),
+                  React.createElement('th',{style:{...S.th,minWidth:80}},'Persona'),
+                  React.createElement('th',{style:{...S.th,minWidth:80}},'Format')
+                )),
+                React.createElement('tbody',null,volumeAds.map((r,i)=>{
+                  const cr=creatives[r.adId]||{};
+                  return React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425',cursor:'pointer'},onClick:()=>setAdTagging(adTagging===r.n?null:r.n)},
+                    React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
+                    React.createElement('td',{style:{...S.td,padding:'4px 6px'}},
+                      cr.thumb
+                        ? React.createElement('a',{href:cr.preview||'#',target:'_blank',rel:'noopener',onClick:e=>e.stopPropagation()},
+                            React.createElement('img',{src:cr.thumb,style:{width:40,height:40,borderRadius:4,objectFit:'cover',display:'block'},onError:e=>{e.target.style.display='none';}})
+                          )
+                        : React.createElement('div',{style:{width:40,height:40,borderRadius:4,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#475569'}},'\uD83D\uDDBC')
+                    ),
+                    React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:250}},
+                      React.createElement('div',{style:{wordBreak:'break-word',lineHeight:1.3,fontSize:12}},r.n),
+                      cr.preview&&React.createElement('a',{href:cr.preview,target:'_blank',rel:'noopener',onClick:e=>e.stopPropagation(),style:{fontSize:10,color:'#3b82f6',textDecoration:'none'}},'Preview \u2197')
+                    ),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,w7:r.w7?.s,format:'$'})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,w7:r.w7?.p,format:'n'})),
+                    React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:r.d2?.roas,prev:r.d1?.roas,w7:r.w7?.roas,format:'x',isRoas:true})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cpa,prev:r.d1?.cpa,w7:r.w7?.cpa,format:'$',invert:true})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.atc,prev:r.d1?.atc,w7:r.w7?.atc,format:'%'})),
+                    React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cvr,prev:r.d1?.cvr,w7:r.w7?.cvr,format:'cvr'})),
+                    React.createElement('td',{style:{...S.td}},React.createElement('span',{style:{fontSize:10,fontWeight:600,color:r.persona!=='Untagged'?'#a78bfa':'#475569',background:r.persona!=='Untagged'?'#1e1640':'transparent',padding:'2px 6px',borderRadius:3}},r.persona)),
+                    React.createElement('td',{style:{...S.td}},React.createElement('span',{style:{fontSize:10,fontWeight:600,color:r.format!=='Untagged'?'#38bdf8':'#475569',background:r.format!=='Untagged'?'#0c1e3a':'transparent',padding:'2px 6px',borderRadius:3}},r.format))
+                  );
+                }))
+              )
+            )
+      ),
+
+      React.createElement('div',{style:{marginTop:14,fontSize:10,color:'#334155'}},'ROAS=\u03A3rev/\u03A3spend | CPA=\u03A3spend/\u03A3purch | CVR=\u03A3purch/\u03A3LPV | Gold Mine = >10 purch & >1.0x ROAS in 7d | Volume = >$1k spend')
+    ),
+
+    // ── AD TAGGING PANEL ──
+    tab==='ads'&&adTagging&&React.createElement('div',{style:{position:'fixed',top:0,right:0,width:400,height:'100vh',background:'#0c1220',borderLeft:'2px solid #1e293b',zIndex:100,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'},className:'fade-in'},
+      React.createElement('div',{style:{padding:'16px 20px',borderBottom:'1px solid #1e293b',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},adTagging),
+          React.createElement('div',{style:{fontSize:11,color:'#64748b',marginTop:4}},'Tag this ad')
+        ),
+        React.createElement('button',{onClick:()=>setAdTagging(null),style:{background:'#1e293b',border:'none',color:'#94a3b8',borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0,marginLeft:12}},'Close')
+      ),
+      // Thumbnail preview
+      (()=>{const ad=adD.find(a=>a.n===adTagging);const cr=creatives[ad?.adId]||{};
+        return React.createElement('div',{style:{padding:'16px 20px',borderBottom:'1px solid #1e293b'}},
+          cr.thumb&&React.createElement('img',{src:cr.thumb,style:{width:'100%',maxHeight:200,objectFit:'contain',borderRadius:6,marginBottom:8}}),
+          cr.preview&&React.createElement('a',{href:cr.preview,target:'_blank',rel:'noopener',style:{fontSize:12,color:'#3b82f6',textDecoration:'none'}},'View ad on Facebook \u2197')
+        );
+      })(),
+      // Persona selector
+      React.createElement('div',{style:{padding:'12px 20px'}},
+        React.createElement('div',{style:{fontSize:11,color:'#94a3b8',fontWeight:600,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}},'Persona'),
+        React.createElement(AdTagSelect,{name:adTagging,field:'persona',options:allPersonas,overrides:ov,onSave:save})
+      ),
+      // Format selector
+      React.createElement('div',{style:{padding:'12px 20px'}},
+        React.createElement('div',{style:{fontSize:11,color:'#94a3b8',fontWeight:600,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}},'Creative Format'),
+        React.createElement(AdTagSelect,{name:adTagging,field:'format',options:allFormats,overrides:ov,onSave:save})
+      ),
+      React.createElement('div',{style:{padding:'10px 20px',fontSize:10,color:'#475569'}},'Changes save automatically. Use Publish to sync to GitHub.')
+    ),
 
     // Campaign drill-down panel
     campDrill&&React.createElement('div',{style:{position:'fixed',top:0,right:0,width:520,height:'100vh',background:'#0c1220',borderLeft:'2px solid #1e293b',zIndex:100,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'},className:'fade-in'},
