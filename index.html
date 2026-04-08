@@ -371,23 +371,17 @@ function Dashboard(){
     setEditingBucket(null);
   },[buckets]);
 
-  // Load default overrides + notes from repo on first visit
+  // Load default overrides + notes from repo — always use repo as source of truth
   useEffect(()=>{
     DEFAULT_OVERRIDES_PROMISE.then(defaults=>{
       if(defaults&&Object.keys(defaults).length>0){
-        // Support both formats: {overrides,notes} or plain overrides object
         const defOv=defaults.overrides||defaults;
         const defNotes=defaults.notes||{};
-        if(LS.get('overrides',null)===null){
-          setOv(defOv);LS.set('overrides',defOv);
-        }
-        if(LS.get('notes',null)===null&&Object.keys(defNotes).length>0){
-          setNotes(defNotes);LS.set('notes',defNotes);
-        }
         const defBuckets=defaults.buckets||{};
-        if(LS.get('buckets',null)===null&&Object.keys(defBuckets).length>0){
-          setBuckets(defBuckets);LS.set('buckets',defBuckets);
-        }
+        // Always update from repo (repo = published source of truth)
+        setOv(defOv);LS.set('overrides',defOv);
+        if(Object.keys(defNotes).length>0){setNotes(defNotes);LS.set('notes',defNotes);}
+        if(Object.keys(defBuckets).length>0){setBuckets(defBuckets);LS.set('buckets',defBuckets);}
       }
       setDefaultsLoaded(true);
     });
