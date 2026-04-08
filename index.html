@@ -512,11 +512,10 @@ function Dashboard(){
       });
       setAdLevelRaw(adParsed);
 
-      // Fetch creative thumbnails for unique ad IDs
+      // Fetch creative thumbnails in background (non-blocking)
       const uniqueAdIds=[...new Set(adParsed.map(r=>r.adId).filter(Boolean))];
       if(uniqueAdIds.length>0){
-        const cr=await fetchAdCreatives(config.token,uniqueAdIds);
-        setCreatives(cr);
+        fetchAdCreatives(config.token,uniqueAdIds).then(cr=>setCreatives(cr)).catch(()=>{});
       }
 
       // Cache the fetch
@@ -599,8 +598,9 @@ function Dashboard(){
 
   // Gold Mine: >10 purchases AND >1.0x ROAS in 7-day window
   const goldMineAds=useMemo(()=>adD.filter(r=>r.w7&&r.w7.p>10&&r.w7.roas>1.0).sort((a,b)=>(b.w7?.roas||0)-(a.w7?.roas||0)),[adD]);
-  // Volume Scaler: >$1k total spend
-  const volumeAds=useMemo(()=>adD.filter(r=>r.tot.s>=1000).sort((a,b)=>b.tot.s-a.tot.s),[adD]);
+  // Volume Scaler: >$1k average daily spend in current period
+  const curDays=useMemo(()=>{const d1=new Date(curFrom+'T12:00:00'),d2=new Date(curTo+'T12:00:00');return Math.max(1,Math.round((d2-d1)/(86400000))+1);},[curFrom,curTo]);
+  const volumeAds=useMemo(()=>adD.filter(r=>r.d2&&(r.d2.s/curDays)>=1000).sort((a,b)=>b.d2.s-a.d2.s),[adD,curDays]);
 
   // Format breakdowns for summaries
   const formatBreakdown=(adList)=>{
@@ -899,7 +899,7 @@ function Dashboard(){
       React.createElement('div',{style:{marginBottom:20}},
         React.createElement('a',{href:'#volume-table',onClick:e=>{e.preventDefault();document.getElementById('volume-table')?.scrollIntoView({behavior:'smooth'});},style:{fontSize:16,fontWeight:700,color:'#3b82f6',cursor:'pointer',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:6}},
           '\u26A1 Volume Scaler Report',
-          React.createElement('span',{style:{fontSize:11,color:'#94a3b8',fontWeight:500}},'('+volumeAds.length+' ads — >$1k spend)')
+          React.createElement('span',{style:{fontSize:11,color:'#94a3b8',fontWeight:500}},'('+volumeAds.length+' ads — >$1k avg daily spend)')
         ),
         volumeAds.length>0&&React.createElement('div',{style:{display:'flex',gap:20,marginTop:8,marginBottom:10}},
           React.createElement('span',{style:{fontSize:12,color:'#94a3b8',...S.mono}},'Spend: $'+Math.round(volumeAds.reduce((a,r)=>a+r.tot.s,0)).toLocaleString()),
@@ -987,7 +987,7 @@ function Dashboard(){
       React.createElement('div',{id:'volume-table',style:{marginBottom:24}},
         React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#3b82f6',marginBottom:8}},'\u26A1 Volume Scaler Report — Detail'),
         volumeAds.length===0
-          ? React.createElement('div',{style:{color:'#64748b',fontSize:12,padding:16}},'No ads with >$1k spend in the selected period.')
+          ? React.createElement('div',{style:{color:'#64748b',fontSize:12,padding:16}},'No ads with >$1k average daily spend in the current period.')
           : React.createElement('div',{style:{overflowX:'auto'}},
               React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
                 React.createElement('thead',null,React.createElement('tr',null,
@@ -1032,7 +1032,7 @@ function Dashboard(){
             )
       ),
 
-      React.createElement('div',{style:{marginTop:14,fontSize:10,color:'#334155'}},'ROAS=\u03A3rev/\u03A3spend | CPA=\u03A3spend/\u03A3purch | CVR=\u03A3purch/\u03A3LPV | Gold Mine = >10 purch & >1.0x ROAS in 7d | Volume = >$1k spend')
+      React.createElement('div',{style:{marginTop:14,fontSize:10,color:'#334155'}},'ROAS=\u03A3rev/\u03A3spend | CPA=\u03A3spend/\u03A3purch | CVR=\u03A3purch/\u03A3LPV | Gold Mine = >10 purch & >1.0x ROAS in 7d | Volume = >$1k avg daily spend')
     ),
 
     // ── AD TAGGING PANEL ──
