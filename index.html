@@ -499,7 +499,7 @@ function Dashboard(){
 
       // Fetch ad-level insights
       const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
-      const adParsed=adData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>{
+      const adParsed=adData.map(r=>{
         const parsed=parseMetaRow(r);
         return{
           adId: r.ad_id||'',
