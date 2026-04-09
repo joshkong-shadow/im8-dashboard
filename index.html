@@ -1405,9 +1405,9 @@ function Dashboard(){
         const hasResults=!!snapApplied;
         const filterLower=snapApplied.toLowerCase();
         const allSnap=hasResults?adD.filter(a=>a.n.toLowerCase().includes(filterLower)):[];
-        const vidAds=allSnap.filter(a=>/VID/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
-        const imgAds=allSnap.filter(a=>/IMG/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
-        const otherAds=allSnap.filter(a=>!/VID|IMG/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+        const vidAds=allSnap.filter(a=>/_VID_/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+        const imgAds=allSnap.filter(a=>/_IMG_/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+        const otherAds=allSnap.filter(a=>!/_VID_|_IMG_/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
 
         const exportSnapshotCSV=async()=>{
           const allAds=[...vidAds,...imgAds,...otherAds];
