@@ -114,23 +114,20 @@ function parseMetaRow(row){
 // ═══ CREATIVE THUMBNAILS ════════════════════════════════════════════════════
 async function fetchAdCreatives(token, adIds){
   const cached = LS.get('creatives',{});
-  // Re-fetch if cached thumb looks like a low-res Meta thumbnail (contains /p64x64/ or /s64x64/)
-  const needed = adIds.filter(id=>!cached[id]||( cached[id].thumb&&/\/[ps]\d+x\d+\//.test(cached[id].thumb)&&cached[id].thumb.includes('64x64')));
+  const needed = adIds.filter(id=>!cached[id]);
   // Batch in groups of 50 using ?ids= batch endpoint
   for(let i=0;i<needed.length;i+=50){
     const batch=needed.slice(i,i+50);
-    const url=`${META_API}/?ids=${batch.join(',')}&fields=creative{thumbnail_url,image_url,effective_object_story_id,object_story_spec}&access_token=${token}`;
+    const url=`${META_API}/?ids=${batch.join(',')}&fields=creative{thumbnail_url,image_url,effective_object_story_id}&access_token=${token}`;
     try{
       const resp=await fetch(url);
       if(resp.ok){
         const json=await resp.json();
         for(const[adId,data] of Object.entries(json)){
           const c=data.creative||{};
-          // Prefer image_url (full res) over thumbnail_url (low res)
-          // Also try to extract image from object_story_spec for higher quality
-          const specImg=c.object_story_spec?.link_data?.image_hash?null:c.object_story_spec?.link_data?.picture||c.object_story_spec?.video_data?.image_url||null;
           cached[adId]={
-            thumb:c.image_url||specImg||c.thumbnail_url||null,
+            thumb:c.thumbnail_url||c.image_url||null,
+            hiRes:c.image_url||c.thumbnail_url||null,
             preview:c.effective_object_story_id?'https://www.facebook.com/'+c.effective_object_story_id:null,
           };
         }
@@ -1443,8 +1440,8 @@ function Dashboard(){
           return React.createElement('div',{key:ad.n,style:{background:'#0c1220',borderRadius:8,border:'1px solid #1e293b',overflow:'hidden',width:220,flexShrink:0}},
             // Thumbnail
             React.createElement('div',{style:{width:'100%',height:160,background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}},
-              cr.thumb
-                ? React.createElement('img',{src:cr.thumb,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})
+              (cr.hiRes||cr.thumb)
+                ? React.createElement('img',{src:cr.hiRes||cr.thumb,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})
                 : React.createElement('div',{style:{color:'#334155',fontSize:32}},'\uD83D\uDDBC')
             ),
             // Info
