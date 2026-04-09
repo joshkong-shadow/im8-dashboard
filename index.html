@@ -617,7 +617,7 @@ function Dashboard(){
     if(tab==='snapshot'){
       if(!snapApplied)return;
       const fl=snapApplied.toLowerCase();
-      const snapAds=adD.filter(a=>/VID|IMG/i.test(a.n)&&a.n.toLowerCase().includes(fl));
+      const snapAds=adD.filter(a=>a.n.toLowerCase().includes(fl));
       const needIds=snapAds.map(a=>a.adId).filter(id=>id&&!creatives[id]);
       if(needIds.length>0)fetchAdCreatives(config.token,[...new Set(needIds)]).then(cr=>setCreatives(cr)).catch(()=>{});
       return;
@@ -1404,12 +1404,13 @@ function Dashboard(){
         const applyFilter=()=>{if(snapFilter.trim())setSnapApplied(snapFilter.trim());};
         const hasResults=!!snapApplied;
         const filterLower=snapApplied.toLowerCase();
-        const allSnap=hasResults?adD.filter(a=>/VID|IMG/i.test(a.n)).filter(a=>a.n.toLowerCase().includes(filterLower)):[];
+        const allSnap=hasResults?adD.filter(a=>a.n.toLowerCase().includes(filterLower)):[];
         const vidAds=allSnap.filter(a=>/VID/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
         const imgAds=allSnap.filter(a=>/IMG/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+        const otherAds=allSnap.filter(a=>!/VID|IMG/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
 
         const exportSnapshotCSV=async()=>{
-          const allAds=[...vidAds,...imgAds];
+          const allAds=[...vidAds,...imgAds,...otherAds];
           const ids=allAds.map(a=>a.adId).filter(Boolean);
           let cr={...creatives};
           const missing=ids.filter(id=>!cr[id]);
@@ -1496,7 +1497,7 @@ function Dashboard(){
             'Format: Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
             ') (Prior: ',React.createElement('b',{style:{color:'#475569'}},d1Label),') ',
             '[Past 14d: ',React.createElement('b',{style:{color:'#586880'}},w7Label),']',
-            ' | ',React.createElement('span',{style:{color:'#94a3b8'}},allSnap.length+' ads total ('+vidAds.length+' video, '+imgAds.length+' image)')
+            ' | ',React.createElement('span',{style:{color:'#94a3b8'}},allSnap.length+' ads total ('+vidAds.length+' video, '+imgAds.length+' image'+(otherAds.length?', '+otherAds.length+' other':'')+')')
           ),
 
           // Videos section
@@ -1521,6 +1522,16 @@ function Dashboard(){
               : React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:12}},
                   imgAds.map(renderCard)
                 )
+          ),
+
+          // Other section (no VID/IMG tag)
+          hasResults&&otherAds.length>0&&React.createElement('div',{style:{marginBottom:24}},
+            React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#94a3b8',marginBottom:12}},'\uD83D\uDCC1 Other',
+              React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:500,marginLeft:8}},'(No VID/IMG tag) \u2014 '+otherAds.length+' ads')
+            ),
+            React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:12}},
+              otherAds.map(renderCard)
+            )
           )
         );
       })()
