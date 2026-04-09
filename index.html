@@ -114,19 +114,23 @@ function parseMetaRow(row){
 // ═══ CREATIVE THUMBNAILS ════════════════════════════════════════════════════
 async function fetchAdCreatives(token, adIds){
   const cached = LS.get('creatives',{});
-  const needed = adIds.filter(id=>!cached[id]);
+  // Re-fetch if cached thumb looks like a low-res Meta thumbnail (contains /p64x64/ or /s64x64/)
+  const needed = adIds.filter(id=>!cached[id]||( cached[id].thumb&&/\/[ps]\d+x\d+\//.test(cached[id].thumb)&&cached[id].thumb.includes('64x64')));
   // Batch in groups of 50 using ?ids= batch endpoint
   for(let i=0;i<needed.length;i+=50){
     const batch=needed.slice(i,i+50);
-    const url=`${META_API}/?ids=${batch.join(',')}&fields=creative{thumbnail_url,image_url,effective_object_story_id}&access_token=${token}`;
+    const url=`${META_API}/?ids=${batch.join(',')}&fields=creative{thumbnail_url,image_url,effective_object_story_id,object_story_spec}&access_token=${token}`;
     try{
       const resp=await fetch(url);
       if(resp.ok){
         const json=await resp.json();
         for(const[adId,data] of Object.entries(json)){
           const c=data.creative||{};
+          // Prefer image_url (full res) over thumbnail_url (low res)
+          // Also try to extract image from object_story_spec for higher quality
+          const specImg=c.object_story_spec?.link_data?.image_hash?null:c.object_story_spec?.link_data?.picture||c.object_story_spec?.video_data?.image_url||null;
           cached[adId]={
-            thumb:c.thumbnail_url||c.image_url||null,
+            thumb:c.image_url||specImg||c.thumbnail_url||null,
             preview:c.effective_object_story_id?'https://www.facebook.com/'+c.effective_object_story_id:null,
           };
         }
