@@ -358,73 +358,96 @@
       "lander": "Dr Amy"
     },
     "260407 GLP-1#3 (NER STATICS)_ALT*": {
-      "lander": "GLP-1"
+      "lander": "GLP-1",
+      "angle": "GLP-1"
     },
     "260407 GLP-1#4 (NER STATICS)_ALT*": {
-      "lander": "GLP-1"
+      "lander": "GLP-1",
+      "angle": "GLP-1"
     },
     "260205 Dr James Dinic VID #4  > 16IN1DRJAMES Lander_ALT*": {
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "angle": "DrJames"
     },
     "260209 Dr James Dinic VID  > 16IN1DRJAMES Lander_ALT*": {
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "angle": "DrJames"
     },
     "260303 DRJAMES DINIC X PROJECT83 - Longevity - PDP(Longevity) 3/3  > 16IN1DRJAMES Lander_ALT*": {
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "angle": "DrJames"
     },
     "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES  > 16IN1DRJAMES Lander_ALT*": {
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "angle": "DrJames"
     },
     "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES 2/3  > 16IN1DRJAMES Lander_ALT*": {
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "angle": "DrJames"
     },
     "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES 3/3 > 16IN1DRJAMES Lander_ALT*": {
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "angle": "DrJames"
     },
     "260410 _(Batch2)IMMUNE WARRIOR_Immune lander_ALT*": {
-      "lander": "Immunity"
+      "lander": "Immunity",
+      "angle": "Immunity"
     },
     "260408_BIOHACKERS_Biohacker Lander_ALT*": {
-      "lander": "Biohacking"
+      "lander": "Biohacking",
+      "angle": "Biohacking"
     },
     "260408_MORNINGRITUALLOVER_MorningRitual Lander_ALT*": {
-      "lander": "Morning Ritual"
+      "lander": "Morning Ritual",
+      "angle": "Morning Ritual"
     },
     "260408_BEAUTYFROMWITHIN_Beauty Lander_ALT*": {
-      "lander": "Beauty"
+      "lander": "Beauty",
+      "angle": "Beauty"
     },
     "260408 _PILL FATIGUE SIMPLIFIER_Pills lander_ALT*": {
-      "lander": "Pills"
+      "lander": "Pills",
+      "angle": "Pill Fatigue (Supp Stackers)"
     },
     "260408 Health Condition Solution Seeker #1 - winners from ori adset (Why IM8 lander)_ALT*": {
-      "lander": "Why IM8"
+      "lander": "Why IM8",
+      "angle": "Health Conditions"
     },
     "260408 Health Condition Solution Seeker #2(Why IM8 lander)_ALT*": {
-      "lander": "Why IM8"
+      "lander": "Why IM8",
+      "angle": "Health Conditions"
     },
     "260408 ANGLE 6: Supplement Stackers(BKM formula lander)-winners from ori adset_ALT*": {
-      "lander": "Beckham Formula"
+      "lander": "Beckham Formula",
+      "angle": "Supplement Stackers"
     },
     "260408_SKEPTICALRESEARCHER_Research Lander_ALT*": {
-      "lander": "Research Lander"
+      "lander": "Research Lander",
+      "angle": "Supplement Skeptics"
     },
     "260410_GREEN POWDER SWITCHER_Greens lander_ALT* 2/2": {
-      "lander": "Greens"
+      "lander": "Greens",
+      "angle": "GreensPowder Switcher"
     },
     "260410_GREEN POWDER SWITCHER_Greens lander_ALT*": {
-      "lander": "Greens"
+      "lander": "Greens",
+      "angle": "GreensPowder Switcher"
     },
     "260410 _COGNITIVE PERFORMER_Focus Lander_ALT*": {
-      "lander": "Focus Lander"
+      "lander": "Focus Lander",
+      "angle": "Brain Health"
     },
     "260410_GUT HEALTH_GetGUT Lander_ALT*": {
-      "lander": "GETGUT Lander"
+      "lander": "GETGUT Lander",
+      "angle": "Gut Health"
     },
     "260408 ACTIVE SENIOR (>45)_ALT*": {
-      "lander": "Aging > 45"
+      "lander": "Aging > 45",
+      "angle": "Aging (General)"
     },
     "260408_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
-      "lander": "Health Conditions"
+      "lander": "Health Conditions",
+      "angle": "Health Conditions"
     }
   },
   "notes": {
