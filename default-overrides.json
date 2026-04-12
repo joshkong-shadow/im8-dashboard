@@ -362,6 +362,69 @@
     },
     "260407 GLP-1#4 (NER STATICS)_ALT*": {
       "lander": "GLP-1"
+    },
+    "260205 Dr James Dinic VID #4  > 16IN1DRJAMES Lander_ALT*": {
+      "lander": "Dr James"
+    },
+    "260209 Dr James Dinic VID  > 16IN1DRJAMES Lander_ALT*": {
+      "lander": "Dr James"
+    },
+    "260303 DRJAMES DINIC X PROJECT83 - Longevity - PDP(Longevity) 3/3  > 16IN1DRJAMES Lander_ALT*": {
+      "lander": "Dr James"
+    },
+    "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES  > 16IN1DRJAMES Lander_ALT*": {
+      "lander": "Dr James"
+    },
+    "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES 2/3  > 16IN1DRJAMES Lander_ALT*": {
+      "lander": "Dr James"
+    },
+    "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES 3/3 > 16IN1DRJAMES Lander_ALT*": {
+      "lander": "Dr James"
+    },
+    "260410 _(Batch2)IMMUNE WARRIOR_Immune lander_ALT*": {
+      "lander": "Immunity"
+    },
+    "260408_BIOHACKERS_Biohacker Lander_ALT*": {
+      "lander": "Biohacking"
+    },
+    "260408_MORNINGRITUALLOVER_MorningRitual Lander_ALT*": {
+      "lander": "Morning Ritual"
+    },
+    "260408_BEAUTYFROMWITHIN_Beauty Lander_ALT*": {
+      "lander": "Beauty"
+    },
+    "260408 _PILL FATIGUE SIMPLIFIER_Pills lander_ALT*": {
+      "lander": "Pills"
+    },
+    "260408 Health Condition Solution Seeker #1 - winners from ori adset (Why IM8 lander)_ALT*": {
+      "lander": "Why IM8"
+    },
+    "260408 Health Condition Solution Seeker #2(Why IM8 lander)_ALT*": {
+      "lander": "Why IM8"
+    },
+    "260408 ANGLE 6: Supplement Stackers(BKM formula lander)-winners from ori adset_ALT*": {
+      "lander": "Beckham Formula"
+    },
+    "260408_SKEPTICALRESEARCHER_Research Lander_ALT*": {
+      "lander": "Research Lander"
+    },
+    "260410_GREEN POWDER SWITCHER_Greens lander_ALT* 2/2": {
+      "lander": "Greens"
+    },
+    "260410_GREEN POWDER SWITCHER_Greens lander_ALT*": {
+      "lander": "Greens"
+    },
+    "260410 _COGNITIVE PERFORMER_Focus Lander_ALT*": {
+      "lander": "Focus Lander"
+    },
+    "260410_GUT HEALTH_GetGUT Lander_ALT*": {
+      "lander": "GETGUT Lander"
+    },
+    "260408 ACTIVE SENIOR (>45)_ALT*": {
+      "lander": "Aging > 45"
+    },
+    "260408_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
+      "lander": "Health Conditions"
     }
   },
   "notes": {
@@ -511,7 +574,10 @@
     "campaigns::L3 | 20260403_TOFU_GLOBAL_ASCCBO_AUTO_IR_LC_ICP1/2(NERMW4-14PERSONA-FREQUENTFLYER)_MT*": "Frequent Flyers",
     "campaigns::L3 | 20260403_TOFU_GLOBAL_ASCCBO_AUTO_IR_LC_ICP2/2(NERMW4-14PERSONA)_MT*": "Couples, Skeptics, Gifting, Active Aging +45",
     "campaigns::L3 | 20260401_TOFU_GLOBAL_ASCCBO_AUTO_IR_LC_ICP(NERMW3-11PERSONA Retest)_MT*": "Weight, Immunity, Greens, Young Professionals",
-    "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP_SLEEP(NERMW3-11PERSONA)_MT*": "Sleep"
+    "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP_SLEEP(NERMW3-11PERSONA)_MT*": "Sleep",
+    "landers::Dr James": "Ambassador - Dr James",
+    "landers::Health Conditions": "Persona - /Health-condition",
+    "landers::Beauty": "Persona - /beauty"
   },
   "buckets": {
     "GLP-1": "X Reasons",
@@ -555,6 +621,10 @@
     "General Health": "Persona",
     "Research Lander": "Persona",
     "Frequent Flyers": "Persona",
-    "Aging > 45": "Persona"
+    "Aging > 45": "Persona",
+    "Dr James": "Ambassador",
+    "Beauty": "Persona",
+    "Health Conditions": "Persona",
+    "MIXED": "Mixed"
   }
 }
