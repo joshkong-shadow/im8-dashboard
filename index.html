@@ -59,6 +59,30 @@ let DEFAULT_OVERRIDES_PROMISE = fetch('./default-overrides.json').then(r=>r.ok?r
 // ═══ META API ═══════════════════════════════════════════════════════════════
 const META_API = 'https://graph.facebook.com/v21.0';
 
+// Fetch the set of currently-ACTIVE ad IDs (entity status, not insights).
+// Used by Inefficiencies to exclude paused/archived ads from the Ad report.
+async function fetchActiveAdIds(token, accountId){
+  const ids = new Set();
+  const params = new URLSearchParams({
+    access_token: token,
+    fields: 'id',
+    filtering: JSON.stringify([{field:'effective_status', operator:'IN', value:['ACTIVE']}]),
+    limit: 500,
+  });
+  let url = `${META_API}/act_${accountId}/ads?${params}`;
+  while(url){
+    const resp = await fetch(url);
+    if(!resp.ok){
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const json = await resp.json();
+    for(const r of json.data || []) ids.add(r.id);
+    url = json.paging?.next || null;
+  }
+  return ids;
+}
+
 // Fetch ad-level insights scoped to specific ad IDs (used for the
 // Inefficiencies p14/p28 secondary fetch — Meta silently caps full
 // account-wide ad-level fetches over wide date ranges).
@@ -509,6 +533,11 @@ function Dashboard(){
   const[ineffAdLongRaw,setIneffAdLongRaw]=useState([]);
   const[ineffAdLongLoading,setIneffAdLongLoading]=useState(false);
   const[ineffAdLongError,setIneffAdLongError]=useState('');
+  // Active ad IDs (effective_status=ACTIVE) — used to exclude paused/off
+  // ads from the Inefficiencies Ad Report. null = not yet fetched.
+  const[activeAdIds,setActiveAdIds]=useState(null);
+  const[activeAdsLoading,setActiveAdsLoading]=useState(false);
+  const[activeAdsError,setActiveAdsError]=useState('');
 
   const[bn,setBn]=useState('');
   const[fms,setFms]=useState(0);
@@ -683,6 +712,17 @@ function Dashboard(){
   // Reset ineff campaign/adset cache when date window changes
   useEffect(()=>{setIneffCampRaw([]);setIneffAdsetRaw([]);},[w14From,curTo]);
 
+  // Lazy-fetch active ad IDs (entity status) — used by Inefficiencies to
+  // exclude paused/archived ads. Fires when on Summary or Inefficiencies tab.
+  useEffect(()=>{
+    if((tab!=='inefficiencies'&&tab!=='summary')||!config)return;
+    if(activeAdIds!==null||activeAdsLoading)return; // already loaded/loading
+    setActiveAdsLoading(true);setActiveAdsError('');
+    fetchActiveAdIds(config.token,config.accountId)
+      .then(ids=>{setActiveAdIds(ids);setActiveAdsLoading(false);})
+      .catch(e=>{setActiveAdsError(e.message);setActiveAdsLoading(false);});
+  },[tab,config,activeAdIds,activeAdsLoading]);
+
   // Inefficiency filter: p7d ROAS < 0.5 AND p7d spend >= $250, sorted by p7d spend desc
   const ineffCamps=useMemo(()=>{
     const g={};
@@ -700,15 +740,16 @@ function Dashboard(){
       .sort((a,b)=>b.p7.s-a.p7.s);
   },[ineffAdsetRaw,aggregateIneff]);
 
-  // Step 1: candidates from main adLevelRaw using p7d filter
+  // Step 1: candidates from main adLevelRaw using p7d filter, scoped to ACTIVE ads only
   const ineffAdCandidates=useMemo(()=>{
+    if(activeAdIds===null)return[]; // wait until active-status set is loaded
     const g={};
     for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
     const sumP7=(rows)=>{let s=0,p=0,r=0,a=0,l=0;for(const x of rows){if(x.day>=w7From&&x.day<=curTo){s+=x.spend;p+=x.purch;r+=x.rev;a+=x.atc;l+=x.lpv;}}return{s,p,roas:s>0?r/s:0,cpa:p>0?s/p:null,atc:l>0?a/l*100:0,cvr:l>0?p/l*100:0};};
     return Object.entries(g).map(([n,rows])=>({n,adId:rows[0]?.adId||'',adset:rows[0]?.adset||'',campaign:rows[0]?.campaign||'',p7:sumP7(rows)}))
-      .filter(r=>r.p7.s>=250&&r.p7.roas<0.5)
+      .filter(r=>r.p7.s>=250&&r.p7.roas<0.5&&activeAdIds.has(r.adId))
       .sort((a,b)=>b.p7.s-a.p7.s);
-  },[adLevelRaw,w7From,curTo]);
+  },[adLevelRaw,w7From,curTo,activeAdIds]);
 
   // Step 2: when on Inefficiencies tab or Summary tab, fetch p14 data for
   // candidate ad IDs only
@@ -1896,7 +1937,10 @@ function Dashboard(){
             !ineffAdLongLoading&&ineffAdLongRaw.length>0&&React.createElement('span',{style:{marginLeft:12,color:'#34d399'}},ineffAdLongRaw.length+' rows for p14d'),
             ineffAdLongError&&React.createElement('span',{style:{marginLeft:12,color:'#f87171'}},'p14d fetch error: '+ineffAdLongError),
             ineffMainError&&React.createElement('span',{style:{marginLeft:12,color:'#f87171'}},'ineff fetch error: '+ineffMainError),
-            error&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},'API error: '+error)
+            error&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},'API error: '+error),
+            activeAdsLoading&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},React.createElement('span',{className:'spinner',style:{width:10,height:10,marginRight:4,verticalAlign:'middle'}}),'Loading active ad statuses...'),
+            activeAdIds&&!activeAdsLoading&&React.createElement('span',{style:{marginLeft:12,color:'#586880'}},activeAdIds.size+' active ads (filter applied)'),
+            activeAdsError&&React.createElement('span',{style:{marginLeft:12,color:'#f87171'}},'active-status fetch error: '+activeAdsError)
           )
         ),
         // Three sections
