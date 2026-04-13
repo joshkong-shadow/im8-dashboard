@@ -253,6 +253,24 @@ const S = {
 };
 
 // ═══ DOD CELL ═══════════════════════════════════════════════════════════════
+// Dual-window cell used by Inefficiencies tab + Summary inefficiency section.
+// p7 (top, big, optionally ROAS-colored) and p14 (below, dim).
+function DualCell({p7,p14,format,colorByRoas}){
+  const f=v=>{if(v==null)return"\u2014";if(format==="$")return"$"+Math.round(v).toLocaleString();if(format==="x")return v.toFixed(2)+"x";if(format==="n")return Math.round(v).toLocaleString();if(format==="%")return v.toFixed(1)+"%";return String(v);};
+  if(colorByRoas){
+    const c=v=>v==null?'#94a3b8':v>=0.95?'#34d399':v>=0.7?'#fbbf24':'#f87171';
+    const bg=v=>v==null?'transparent':v>=0.95?'#06261a':v>=0.7?'#26230a':'#260a0a';
+    return React.createElement('div',{style:{textAlign:'center'}},
+      React.createElement('div',{style:{background:bg(p7),color:c(p7),padding:'2px 6px',borderRadius:3,fontSize:13,fontWeight:600,...S.mono,display:'inline-block',minWidth:48}},f(p7)),
+      React.createElement('div',{style:{color:c(p14),fontSize:11,...S.mono,marginTop:2,opacity:0.7}},f(p14))
+    );
+  }
+  return React.createElement('div',null,
+    React.createElement('div',{style:{color:'#e2e8f0',fontSize:13,fontWeight:600,...S.mono}},f(p7)),
+    React.createElement('div',{style:{color:'#586880',fontSize:11,...S.mono,marginTop:2}},f(p14))
+  );
+}
+
 function DoDCell({cur,prev,w7,format,invert,isRoas}){
   const f=v=>{if(v==null)return"\u2014";if(format==="$")return"$"+Math.round(v).toLocaleString();if(format==="%")return v.toFixed(1)+"%";if(format==="cvr")return v.toFixed(2)+"%";if(format==="x")return v.toFixed(2)+"x";if(format==="n")return Math.round(v).toLocaleString();return String(v);};
   const sz={fontSize:13,fontWeight:600,...S.mono};
@@ -646,10 +664,10 @@ function Dashboard(){
     return{p7:sumRange(w7From,curTo),p14:sumRange(w14From,curTo)};
   },[w7From,w14From,curTo]);
 
-  // Lazy-fetch unfiltered campaign + adset data for Inefficiencies tab on
-  // tab open. Other tabs use the main filtered fetch.
+  // Lazy-fetch unfiltered campaign + adset data for the Inefficiencies tab
+  // and the Inefficiencies Summary section. Other tabs use the main filtered fetch.
   useEffect(()=>{
-    if(tab!=='inefficiencies'||!config)return;
+    if((tab!=='inefficiencies'&&tab!=='summary')||!config)return;
     if(ineffCampRaw.length>0||ineffMainLoading)return; // already loaded/loading
     setIneffMainLoading(true);setIneffMainError('');
     Promise.all([
@@ -692,9 +710,10 @@ function Dashboard(){
       .sort((a,b)=>b.p7.s-a.p7.s);
   },[adLevelRaw,w7From,curTo]);
 
-  // Step 2: when on Inefficiencies tab, fetch p14 data for candidate ad IDs only
+  // Step 2: when on Inefficiencies tab or Summary tab, fetch p14 data for
+  // candidate ad IDs only
   useEffect(()=>{
-    if(tab!=='inefficiencies'||!config)return;
+    if((tab!=='inefficiencies'&&tab!=='summary')||!config)return;
     const ids=ineffAdCandidates.map(c=>c.adId).filter(Boolean);
     if(ids.length===0){setIneffAdLongRaw([]);return;}
     setIneffAdLongLoading(true);setIneffAdLongError('');
@@ -767,11 +786,18 @@ function Dashboard(){
   const volumeFmts=useMemo(()=>formatBreakdown(volumeAds),[volumeAds,adLevelRaw]);
 
   // All persona/format options for tagging
-  // Fetch thumbnails only for ads visible on Ads tab (not summary)
+  // Fetch thumbnails for ads visible on relevant tabs
   useEffect(()=>{
-    if(!config||(tab!=='ads'&&tab!=='snapshot'&&tab!=='inefficiencies')||adLevelRaw.length===0)return;
+    if(!config||(tab!=='ads'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='summary')||adLevelRaw.length===0)return;
     if(tab==='inefficiencies'){
       const visible=ineffAds.slice(0,ineffAdLimit);
+      const needIds=visible.map(a=>a.adId).filter(id=>id&&!creatives[id]);
+      if(needIds.length>0)fetchAdCreatives(config.token,[...new Set(needIds)]).then(cr=>setCreatives(cr)).catch(()=>{});
+      return;
+    }
+    if(tab==='summary'){
+      // Top 10 inefficient ads (for Summary section thumbnails)
+      const visible=ineffAds.slice(0,10);
       const needIds=visible.map(a=>a.adId).filter(id=>id&&!creatives[id]);
       if(needIds.length>0)fetchAdCreatives(config.token,[...new Set(needIds)]).then(cr=>setCreatives(cr)).catch(()=>{});
       return;
@@ -1339,7 +1365,70 @@ function Dashboard(){
                 ))
               )
             )
-      )
+      ),
+
+      // ── S8: INEFFICIENCY SUMMARY ──
+      (()=>{
+        const renderTable=(rows,level,color,title,emoji)=>{
+          const top=rows.slice(0,10);
+          return React.createElement('div',{key:level,style:{marginBottom:18}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color,marginBottom:6}},emoji+' '+title,
+              React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:500,marginLeft:8}},'('+rows.length+' total wasting spend)')
+            ),
+            top.length===0
+              ? React.createElement('div',{style:{color:'#475569',fontSize:11,padding:10,background:'#0c1220',borderRadius:6}},'No '+level+'s match the inefficiency filter.')
+              : React.createElement('div',{style:{overflowX:'auto'}},
+                  React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+                    React.createElement('thead',null,React.createElement('tr',null,
+                      React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+                      level==='ad'&&React.createElement('th',{style:{...S.th,width:48}},''),
+                      React.createElement('th',{style:{...S.th,minWidth:170}},level==='campaign'?'Campaign':level==='adset'?'Adset':'Ad Name'),
+                      React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+                      React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+                      React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+                      React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA')
+                    )),
+                    React.createElement('tbody',null,top.map((r,i)=>{
+                      const cr=level==='ad'?(creatives[r.adId]||{}):null;
+                      return React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                        React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
+                        level==='ad'&&React.createElement('td',{style:{...S.td,padding:'4px 6px'}},
+                          cr.thumb
+                            ? React.createElement('a',{href:cr.preview||'#',target:'_blank',rel:'noopener'},
+                                React.createElement('img',{src:cr.thumb,style:{width:36,height:36,borderRadius:4,objectFit:'cover',display:'block'},onError:e=>{e.target.style.display='none';}})
+                              )
+                            : React.createElement('div',{style:{width:36,height:36,borderRadius:4,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#475569'}},'\uD83D\uDDBC')
+                        ),
+                        React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:280}},
+                          React.createElement('div',{style:{wordBreak:'break-word',lineHeight:1.3,fontSize:12}},r.n)
+                        ),
+                        React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.p7.s,p14:r.p14?.s,format:'$'})),
+                        React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.p7.p,p14:r.p14?.p,format:'n'})),
+                        React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DualCell,{p7:r.p7.roas,p14:r.p14?.roas,format:'x',colorByRoas:true})),
+                        React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.p7.cpa,p14:r.p14?.cpa,format:'$'}))
+                      );
+                    }))
+                  )
+                )
+          );
+        };
+        return React.createElement('div',{style:{marginBottom:24}},
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:8,flexWrap:'wrap',gap:8}},
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#f87171'}},'\u26A0 Inefficiency Summary'),
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},'Top 10 underperformers per level — p7d ROAS < 0.5 with $250+ spend. Top = p7d, below = p14d.')
+            ),
+            React.createElement('button',{onClick:()=>{setTab('inefficiencies');setEp(null);},style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'5px 12px',color:'#3b82f6',fontSize:11,fontWeight:600,cursor:'pointer'}},'View full Inefficiencies tab \u2192')
+          ),
+          ineffMainLoading&&React.createElement('div',{style:{color:'#fbbf24',fontSize:11,marginBottom:10,padding:'8px 12px',background:'#0c1220',borderRadius:6,border:'1px solid #1e293b'}},
+            React.createElement('span',{className:'spinner',style:{width:12,height:12,marginRight:6,verticalAlign:'middle'}}),'Loading inefficiency data (campaigns + adsets, 14d)...'
+          ),
+          ineffMainError&&React.createElement('div',{style:{color:'#f87171',fontSize:11,marginBottom:10,padding:'8px 12px',background:'#260a0a',borderRadius:6}},'Error loading inefficiency data: '+ineffMainError),
+          renderTable(ineffCamps,'campaign','#f87171','\uD83D\uDD25 Top Wasting Campaigns'),
+          renderTable(ineffAdsets,'adset','#fb923c','\uD83D\uDCCA Top Wasting Adsets'),
+          renderTable(ineffAds,'ad','#facc15','\uD83C\uDFAF Top Wasting Ads')
+        );
+      })()
     ),
 
     // ═══ ADS TAB ═══════════════════════════════════════════════════════════════
@@ -1704,22 +1793,6 @@ function Dashboard(){
       const fmtLabel=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
       const w7Lbl=fmtLabel(w7From)+' – '+fmtLabel(curTo);
       const w14Lbl=fmtLabel(w14From)+' – '+fmtLabel(curTo);
-      // Dual-window cell: p7 (top, big) and p14 (below, dim)
-      const DualCell=({p7,p14,format,colorByRoas,invert})=>{
-        const f=v=>{if(v==null)return"\u2014";if(format==="$")return"$"+Math.round(v).toLocaleString();if(format==="x")return v.toFixed(2)+"x";if(format==="n")return Math.round(v).toLocaleString();if(format==="%")return v.toFixed(1)+"%";return String(v);};
-        if(colorByRoas){
-          const c=v=>v==null?'#94a3b8':v>=0.95?'#34d399':v>=0.7?'#fbbf24':'#f87171';
-          const bg=v=>v==null?'transparent':v>=0.95?'#06261a':v>=0.7?'#26230a':'#260a0a';
-          return React.createElement('div',{style:{textAlign:'center'}},
-            React.createElement('div',{style:{background:bg(p7),color:c(p7),padding:'2px 6px',borderRadius:3,fontSize:13,fontWeight:600,...S.mono,display:'inline-block',minWidth:48}},f(p7)),
-            React.createElement('div',{style:{color:c(p14),fontSize:11,...S.mono,marginTop:2,opacity:0.7}},f(p14))
-          );
-        }
-        return React.createElement('div',null,
-          React.createElement('div',{style:{color:'#e2e8f0',fontSize:13,fontWeight:600,...S.mono}},f(p7)),
-          React.createElement('div',{style:{color:'#586880',fontSize:11,...S.mono,marginTop:2}},f(p14))
-        );
-      };
 
       const renderSection=(title,color,emoji,rows,limit,setLimit,level,expanded,setExpanded)=>{
         const visible=rows.slice(0,limit);
