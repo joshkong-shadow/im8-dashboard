@@ -1723,6 +1723,14 @@ function Dashboard(){
             ' | Middle = ',React.createElement('b',{style:{color:'#94a3b8'}},'p14d (',w14Lbl,')'),
             ' | [Brackets] = ',React.createElement('b',{style:{color:'#586880'}},'p28d (',w28Lbl,')'),
             lastFetch&&React.createElement('span',{style:{marginLeft:12,color:'#475569'}},'Last fetch: '+lastFetch)
+          ),
+          // Diagnostic row — show fetched row counts so we can tell if API returned data
+          React.createElement('div',{style:{marginTop:6,fontSize:10,color:'#475569'}},
+            'Fetched rows: ',
+            React.createElement('b',{style:{color:campRaw.length>0?'#34d399':'#f87171'}},campRaw.length+' campaign'),
+            ' | ',React.createElement('b',{style:{color:adsetRaw.length>0?'#34d399':'#f87171'}},adsetRaw.length+' adset'),
+            ' | ',React.createElement('b',{style:{color:adLevelRaw.length>0?'#34d399':'#f87171'}},adLevelRaw.length+' ad'),
+            error&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},'API error: '+error)
           )
         ),
         // Three sections
