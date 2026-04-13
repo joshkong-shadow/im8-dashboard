@@ -59,6 +59,38 @@ let DEFAULT_OVERRIDES_PROMISE = fetch('./default-overrides.json').then(r=>r.ok?r
 // ═══ META API ═══════════════════════════════════════════════════════════════
 const META_API = 'https://graph.facebook.com/v21.0';
 
+// Fetch ad-level insights scoped to specific ad IDs (used for the
+// Inefficiencies p14/p28 secondary fetch — Meta silently caps full
+// account-wide ad-level fetches over wide date ranges).
+async function fetchAdInsightsByIds(token, accountId, adIds, dateFrom, dateTo){
+  const out = [];
+  // Chunk IDs in batches of 50 to stay well under Meta's filter value limit
+  for(let i=0; i<adIds.length; i+=50){
+    const batch = adIds.slice(i, i+50);
+    const params = new URLSearchParams({
+      access_token: token,
+      level: 'ad',
+      fields: 'ad_id,ad_name,adset_name,campaign_name,spend,actions,action_values',
+      time_range: JSON.stringify({since: dateFrom, until: dateTo}),
+      time_increment: 1,
+      filtering: JSON.stringify([{field:'ad.id', operator:'IN', value: batch}]),
+      limit: 500,
+    });
+    let url = `${META_API}/act_${accountId}/insights?${params}`;
+    while(url){
+      const resp = await fetch(url);
+      if(!resp.ok){
+        const err = await resp.json().catch(()=>({}));
+        throw new Error(err.error?.message || `API error ${resp.status}`);
+      }
+      const json = await resp.json();
+      out.push(...(json.data || []));
+      url = json.paging?.next || null;
+    }
+  }
+  return out;
+}
+
 async function fetchInsights(token, accountId, level, dateFrom, dateTo){
   // level = 'campaign', 'adset', or 'ad'
   const fields = level === 'campaign'
@@ -447,6 +479,12 @@ function Dashboard(){
   const[ineffCampExpanded,setIneffCampExpanded]=useState(null);
   const[ineffAdsetExpanded,setIneffAdsetExpanded]=useState(null);
   const[ineffAdExpanded,setIneffAdExpanded]=useState(null);
+  // Two-step ad fetch: p7d candidates come from main adLevelRaw; p14/p28
+  // data is fetched on-demand for those candidate ad IDs (Meta silently
+  // caps wide account-wide ad-level fetches).
+  const[ineffAdLongRaw,setIneffAdLongRaw]=useState([]);
+  const[ineffAdLongLoading,setIneffAdLongLoading]=useState(false);
+  const[ineffAdLongError,setIneffAdLongError]=useState('');
 
   const[bn,setBn]=useState('');
   const[fms,setFms]=useState(0);
@@ -465,9 +503,8 @@ function Dashboard(){
   // 7-day trailing window ending on curTo
   const w7To=curTo;
   const w7From=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-6);return fmt(d);},[curTo]);
-  // 14-day and 28-day trailing windows used by Inefficiencies tab
+  // 14-day trailing window used by Inefficiencies tab
   const w14From=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-13);return fmt(d);},[curTo]);
-  const w28From=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-27);return fmt(d);},[curTo]);
 
   const save=useCallback(nx=>{setOv(nx);LS.set('overrides',nx);},[]);
 
@@ -477,13 +514,19 @@ function Dashboard(){
   const fetchData=useCallback(async()=>{
     if(!config)return;
     setLoading(true);setError('');
-    // Expand date range to cover all periods: prior, current, and 7d trailing
-    const allDates=[curFrom,curTo,priFrom,priTo,w7From,w28From];
-    const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
-    const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
+    // Wide range covers p14d for campaign+adset Inefficiencies aggregations.
+    // Narrow range (no p14d) is used for ad-level — Meta silently caps wide
+    // account-wide ad-level requests; p14 ad data is fetched on-demand per
+    // inefficient ad ID via fetchAdInsightsByIds.
+    const wideDates=[curFrom,curTo,priFrom,priTo,w7From,w14From];
+    const wideFrom=wideDates.reduce((a,b)=>a<=b?a:b);
+    const wideTo=wideDates.reduce((a,b)=>a>=b?a:b);
+    const narrowDates=[curFrom,curTo,priFrom,priTo,w7From];
+    const narrowFrom=narrowDates.reduce((a,b)=>a<=b?a:b);
+    const narrowTo=narrowDates.reduce((a,b)=>a>=b?a:b);
     try{
       // Fetch campaign-level insights — store ALL campaigns (filter _MT at consumption)
-      const campData=await fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo);
+      const campData=await fetchInsights(config.token,config.accountId,'campaign',wideFrom,wideTo);
       const campParsed=campData.map(r=>({
         name: r.campaign_name,
         rawName: r.campaign_name,
@@ -493,7 +536,7 @@ function Dashboard(){
       setCampRaw(campParsed);
 
       // Fetch adset-level insights — store ALL adsets (filter _MT/_ALT at consumption)
-      const adsetData=await fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo);
+      const adsetData=await fetchInsights(config.token,config.accountId,'adset',wideFrom,wideTo);
       const adsetParsed=adsetData.map(r=>{
         const parsed=parseMetaRow(r);
         return{
@@ -505,8 +548,9 @@ function Dashboard(){
       });
       setAdsetRaw(adsetParsed);
 
-      // Fetch ad-level insights (needed for Summary + Ads tabs)
-      const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
+      // Fetch ad-level insights at narrow range (covers p7d). Inefficiencies
+      // tab fetches p14/p28 separately, scoped to inefficient ad IDs only.
+      const adData=await fetchInsights(config.token,config.accountId,'ad',narrowFrom,narrowTo);
       const adParsed=adData.map(r=>{
         const parsed=parseMetaRow(r);
         return{
@@ -539,7 +583,7 @@ function Dashboard(){
       }
     }
     setLoading(false);
-  },[config,curFrom,curTo,priFrom,priTo,w7From,w28From]);
+  },[config,curFrom,curTo,priFrom,priTo,w7From,w14From]);
 
   // Auto-fetch on config load or date change
   useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
@@ -599,11 +643,11 @@ function Dashboard(){
   },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
 
   // ═══ INEFFICIENCIES TAB DATA ════════════════════════════════════════════
-  // Aggregate raw rows into 3 trailing windows (p7/p14/p28) ending on curTo
+  // Aggregate raw rows into 2 trailing windows (p7/p14) ending on curTo
   const aggregateIneff=useCallback((rows)=>{
     const sumRange=(from,to)=>{let s=0,p=0,r=0,a=0,l=0;for(const x of rows){if(x.day>=from&&x.day<=to){s+=x.spend;p+=x.purch;r+=x.rev;a+=x.atc;l+=x.lpv;}}return{s,p,roas:s>0?r/s:0,cpa:p>0?s/p:null,atc:l>0?a/l*100:0,cvr:l>0?p/l*100:0};};
-    return{p7:sumRange(w7From,curTo),p14:sumRange(w14From,curTo),p28:sumRange(w28From,curTo)};
-  },[w7From,w14From,w28From,curTo]);
+    return{p7:sumRange(w7From,curTo),p14:sumRange(w14From,curTo)};
+  },[w7From,w14From,curTo]);
 
   // Inefficiency filter: p7d ROAS < 0.5 AND p7d spend >= $250, sorted by p7d spend desc
   const ineffCamps=useMemo(()=>{
@@ -622,13 +666,41 @@ function Dashboard(){
       .sort((a,b)=>b.p7.s-a.p7.s);
   },[adsetRaw,aggregateIneff]);
 
-  const ineffAds=useMemo(()=>{
+  // Step 1: candidates from main adLevelRaw using p7d filter
+  const ineffAdCandidates=useMemo(()=>{
     const g={};
     for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
-    return Object.entries(g).map(([n,rows])=>({n,adId:rows[0]?.adId||'',adset:rows[0]?.adset||'',campaign:rows[0]?.campaign||'',...aggregateIneff(rows)}))
+    const sumP7=(rows)=>{let s=0,p=0,r=0,a=0,l=0;for(const x of rows){if(x.day>=w7From&&x.day<=curTo){s+=x.spend;p+=x.purch;r+=x.rev;a+=x.atc;l+=x.lpv;}}return{s,p,roas:s>0?r/s:0,cpa:p>0?s/p:null,atc:l>0?a/l*100:0,cvr:l>0?p/l*100:0};};
+    return Object.entries(g).map(([n,rows])=>({n,adId:rows[0]?.adId||'',adset:rows[0]?.adset||'',campaign:rows[0]?.campaign||'',p7:sumP7(rows)}))
       .filter(r=>r.p7.s>=250&&r.p7.roas<0.5)
       .sort((a,b)=>b.p7.s-a.p7.s);
-  },[adLevelRaw,aggregateIneff]);
+  },[adLevelRaw,w7From,curTo]);
+
+  // Step 2: when on Inefficiencies tab, fetch p14 data for candidate ad IDs only
+  useEffect(()=>{
+    if(tab!=='inefficiencies'||!config)return;
+    const ids=ineffAdCandidates.map(c=>c.adId).filter(Boolean);
+    if(ids.length===0){setIneffAdLongRaw([]);return;}
+    setIneffAdLongLoading(true);setIneffAdLongError('');
+    fetchAdInsightsByIds(config.token,config.accountId,ids,w14From,curTo)
+      .then(rows=>{setIneffAdLongRaw(rows);setIneffAdLongLoading(false);})
+      .catch(e=>{setIneffAdLongError(e.message);setIneffAdLongLoading(false);});
+  },[tab,config,ineffAdCandidates,w14From,curTo]);
+
+  // Combine p7 (from candidates) with p14 (from secondary fetch)
+  const ineffAds=useMemo(()=>{
+    if(ineffAdCandidates.length===0)return[];
+    const longByName={};
+    for(const r of ineffAdLongRaw){const k=r.ad_name||'Unknown';if(!longByName[k])longByName[k]=[];longByName[k].push(r);}
+    const sumRange=(rows,from,to)=>{let s=0,p=0,r=0,a=0,l=0;for(const x of rows){if(x.date_start>=from&&x.date_start<=to){const parsed=parseMetaRow(x);s+=parsed.spend;p+=parsed.purchases;r+=parsed.revenue;a+=parsed.atc;l+=parsed.lpv;}}return{s,p,roas:s>0?r/s:0,cpa:p>0?s/p:null,atc:l>0?a/l*100:0,cvr:l>0?p/l*100:0};};
+    return ineffAdCandidates.map(c=>{
+      const longRows=longByName[c.n]||[];
+      return{
+        ...c,
+        p14: longRows.length?sumRange(longRows,w14From,curTo):{s:null,p:null,roas:null,cpa:null,atc:null,cvr:null},
+      };
+    });
+  },[ineffAdCandidates,ineffAdLongRaw,w14From,curTo]);
 
   // CSV export for inefficiencies tables
   const exportIneffCSV=useCallback((rows,level,filename)=>{
@@ -636,16 +708,17 @@ function Dashboard(){
     const baseHdr=[level==='campaign'?'Campaign':level==='adset'?'Adset':'Ad Name'];
     if(level==='adset')baseHdr.push('Campaign');
     if(level==='ad')baseHdr.push('Adset','Campaign');
-    const hdr=[...baseHdr,'Spend (7d)','Spend (14d)','Spend (28d)','Purch (7d)','Purch (14d)','Purch (28d)','ROAS (7d)','ROAS (14d)','ROAS (28d)','CPA (7d)','CPA (14d)','CPA (28d)'];
+    const hdr=[...baseHdr,'Spend (7d)','Spend (14d)','Purch (7d)','Purch (14d)','ROAS (7d)','ROAS (14d)','CPA (7d)','CPA (14d)'];
     const csvRows=rows.map(r=>{
       const base=[r.n];
       if(level==='adset')base.push(r.campaign||'');
       if(level==='ad')base.push(r.adset||'',r.campaign||'');
+      const p14s=r.p14?.s,p14p=r.p14?.p,p14r=r.p14?.roas,p14c=r.p14?.cpa;
       return[...base,
-        r.p7.s.toFixed(2),r.p14.s.toFixed(2),r.p28.s.toFixed(2),
-        Math.round(r.p7.p),Math.round(r.p14.p),Math.round(r.p28.p),
-        r.p7.roas.toFixed(2),r.p14.roas.toFixed(2),r.p28.roas.toFixed(2),
-        r.p7.cpa!=null?r.p7.cpa.toFixed(2):'',r.p14.cpa!=null?r.p14.cpa.toFixed(2):'',r.p28.cpa!=null?r.p28.cpa.toFixed(2):'',
+        r.p7.s.toFixed(2),p14s!=null?p14s.toFixed(2):'',
+        Math.round(r.p7.p),p14p!=null?Math.round(p14p):'',
+        r.p7.roas.toFixed(2),p14r!=null?p14r.toFixed(2):'',
+        r.p7.cpa!=null?r.p7.cpa.toFixed(2):'',p14c!=null?p14c.toFixed(2):'',
       ].map(esc);
     });
     const csv=[hdr.join(','),...csvRows.map(r=>r.join(','))].join('\n');
@@ -1615,23 +1688,20 @@ function Dashboard(){
       const fmtLabel=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
       const w7Lbl=fmtLabel(w7From)+' – '+fmtLabel(curTo);
       const w14Lbl=fmtLabel(w14From)+' – '+fmtLabel(curTo);
-      const w28Lbl=fmtLabel(w28From)+' – '+fmtLabel(curTo);
-      // Triple-window cell: p7 (top), p14 (middle), p28 (brackets bottom)
-      const TripleCell=({p7,p14,p28,format,colorByRoas,invert})=>{
+      // Dual-window cell: p7 (top, big) and p14 (below, dim)
+      const DualCell=({p7,p14,format,colorByRoas,invert})=>{
         const f=v=>{if(v==null)return"\u2014";if(format==="$")return"$"+Math.round(v).toLocaleString();if(format==="x")return v.toFixed(2)+"x";if(format==="n")return Math.round(v).toLocaleString();if(format==="%")return v.toFixed(1)+"%";return String(v);};
         if(colorByRoas){
           const c=v=>v==null?'#94a3b8':v>=0.95?'#34d399':v>=0.7?'#fbbf24':'#f87171';
           const bg=v=>v==null?'transparent':v>=0.95?'#06261a':v>=0.7?'#26230a':'#260a0a';
           return React.createElement('div',{style:{textAlign:'center'}},
             React.createElement('div',{style:{background:bg(p7),color:c(p7),padding:'2px 6px',borderRadius:3,fontSize:13,fontWeight:600,...S.mono,display:'inline-block',minWidth:48}},f(p7)),
-            React.createElement('div',{style:{color:c(p14),fontSize:12,...S.mono,marginTop:2,opacity:0.75}},f(p14)),
-            React.createElement('div',{style:{color:'#586880',fontSize:10,...S.mono,marginTop:1}},'['+f(p28)+']')
+            React.createElement('div',{style:{color:c(p14),fontSize:11,...S.mono,marginTop:2,opacity:0.7}},f(p14))
           );
         }
         return React.createElement('div',null,
           React.createElement('div',{style:{color:'#e2e8f0',fontSize:13,fontWeight:600,...S.mono}},f(p7)),
-          React.createElement('div',{style:{color:'#94a3b8',fontSize:12,...S.mono,marginTop:2}},f(p14)),
-          React.createElement('div',{style:{color:'#586880',fontSize:10,...S.mono,marginTop:1}},'['+f(p28)+']')
+          React.createElement('div',{style:{color:'#586880',fontSize:11,...S.mono,marginTop:2}},f(p14))
         );
       };
 
@@ -1678,10 +1748,10 @@ function Dashboard(){
                         canExpand&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:2}},isExpanded?'\u25BC Hide parent':'\u25B6 Show parent'),
                         level==='campaign'&&r.cnt!=null&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:2}},r.cnt+' adset'+(r.cnt!==1?'s':''))
                       ),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(TripleCell,{p7:r.p7.s,p14:r.p14.s,p28:r.p28.s,format:'$'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(TripleCell,{p7:r.p7.p,p14:r.p14.p,p28:r.p28.p,format:'n'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(TripleCell,{p7:r.p7.roas,p14:r.p14.roas,p28:r.p28.roas,format:'x',colorByRoas:true})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(TripleCell,{p7:r.p7.cpa,p14:r.p14.cpa,p28:r.p28.cpa,format:'$'}))
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.p7.s,p14:r.p14?.s,format:'$'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.p7.p,p14:r.p14?.p,format:'n'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DualCell,{p7:r.p7.roas,p14:r.p14?.roas,format:'x',colorByRoas:true})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.p7.cpa,p14:r.p14?.cpa,format:'$'}))
                     );
                     if(!isExpanded||!canExpand)return[main];
                     const expandRow=React.createElement('tr',{key:r.n+'__exp',style:{background:'#0a1020'}},
@@ -1720,8 +1790,7 @@ function Dashboard(){
           'Showing only entries with ',React.createElement('b',{style:{color:'#e2e8f0'}},'p7d ROAS < 0.5'),' AND ',React.createElement('b',{style:{color:'#e2e8f0'}},'p7d spend \u2265 $250'),'. Sorted by p7d spend (worst waste first).',
           React.createElement('div',{style:{marginTop:6,fontSize:10}},
             'Top = ',React.createElement('b',{style:{color:'#94a3b8'}},'p7d (',w7Lbl,')'),
-            ' | Middle = ',React.createElement('b',{style:{color:'#94a3b8'}},'p14d (',w14Lbl,')'),
-            ' | [Brackets] = ',React.createElement('b',{style:{color:'#586880'}},'p28d (',w28Lbl,')'),
+            ' | Below = ',React.createElement('b',{style:{color:'#586880'}},'p14d (',w14Lbl,')'),
             lastFetch&&React.createElement('span',{style:{marginLeft:12,color:'#475569'}},'Last fetch: '+lastFetch)
           ),
           // Diagnostic row — show fetched row counts so we can tell if API returned data
@@ -1729,7 +1798,10 @@ function Dashboard(){
             'Fetched rows: ',
             React.createElement('b',{style:{color:campRaw.length>0?'#34d399':'#f87171'}},campRaw.length+' campaign'),
             ' | ',React.createElement('b',{style:{color:adsetRaw.length>0?'#34d399':'#f87171'}},adsetRaw.length+' adset'),
-            ' | ',React.createElement('b',{style:{color:adLevelRaw.length>0?'#34d399':'#f87171'}},adLevelRaw.length+' ad'),
+            ' | ',React.createElement('b',{style:{color:adLevelRaw.length>0?'#34d399':'#f87171'}},adLevelRaw.length+' ad (p7d source)'),
+            ineffAdLongLoading&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},React.createElement('span',{className:'spinner',style:{width:10,height:10,marginRight:4,verticalAlign:'middle'}}),'Loading p14d for '+ineffAdCandidates.length+' inefficient ads...'),
+            !ineffAdLongLoading&&ineffAdLongRaw.length>0&&React.createElement('span',{style:{marginLeft:12,color:'#34d399'}},ineffAdLongRaw.length+' rows for p14d'),
+            ineffAdLongError&&React.createElement('span',{style:{marginLeft:12,color:'#f87171'}},'p14d fetch error: '+ineffAdLongError),
             error&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},'API error: '+error)
           )
         ),
