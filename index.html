@@ -482,10 +482,9 @@ function Dashboard(){
     const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
     const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
     try{
-      // Fetch campaign-level insights
+      // Fetch campaign-level insights — store ALL campaigns (filter _MT at consumption)
       const campData=await fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo);
-      // Only include campaigns tagged _MT
-      const campParsed=campData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>({
+      const campParsed=campData.map(r=>({
         name: r.campaign_name,
         rawName: r.campaign_name,
         day: r.date_start,
@@ -493,9 +492,9 @@ function Dashboard(){
       })).map(r=>({...r,rev:r.revenue,purch:r.purchases}));
       setCampRaw(campParsed);
 
-      // Fetch adset-level insights — store all adsets (filter _ALT only for angles/landers)
+      // Fetch adset-level insights — store ALL adsets (filter _MT/_ALT at consumption)
       const adsetData=await fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo);
-      const adsetParsed=adsetData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>{
+      const adsetParsed=adsetData.map(r=>{
         const parsed=parseMetaRow(r);
         return{
           name: r.adset_name||'Unknown',
@@ -545,8 +544,8 @@ function Dashboard(){
   // Auto-fetch on config load or date change
   useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
 
-  // Process adsets with overrides — _ALT filter only for angles/landers tabs
-  const ads=useMemo(()=>adsetRaw.filter(r=>/_ALT/.test(r.name)).map(r=>{
+  // Process adsets with overrides — _ALT filter + _MT campaign filter for angles/landers tabs
+  const ads=useMemo(()=>adsetRaw.filter(r=>/_ALT/.test(r.name)&&/_MT/.test(r.campaign||'')).map(r=>{
     const o=ov[r.name]||{};
     return{...r,angle:o.angle||autoAngle(r.name),lander:o.lander||autoLander(r.name)};
   }),[adsetRaw,ov]);
@@ -583,7 +582,7 @@ function Dashboard(){
   },[adsetRaw]);
   const campD=useMemo(()=>{
     const g={};
-    for(const r of campRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    for(const r of campRaw){if(!/_MT/.test(r.name))continue;const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
     return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To),cnt:campAdsetCounts[n]||0})).sort((a,b)=>b.tot.s-a.tot.s);
   },[campRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,campAdsetCounts]);
 
