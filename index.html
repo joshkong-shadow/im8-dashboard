@@ -520,19 +520,13 @@ function Dashboard(){
   const fetchData=useCallback(async()=>{
     if(!config)return;
     setLoading(true);setError('');
-    // Original narrow range. Inefficiencies tab does its own fetches on demand
-    // so the main flow stays lean and other tabs are unaffected.
     const allDates=[curFrom,curTo,priFrom,priTo,w7From];
     const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
     const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
     try{
-      // Run the 3 main fetches in parallel
-      const [campData,adsetData,adData]=await Promise.all([
-        fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo),
-        fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo),
-        fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo),
-      ]);
-      // Campaigns: filter to _MT at fetch (matches original Campaigns tab scope)
+      // Sequential fetch — original pattern. Each setX renders the matching
+      // tab as soon as data is ready (campaigns first, then adsets, then ads).
+      const campData=await fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo);
       const campParsed=campData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>({
         name: r.campaign_name,
         rawName: r.campaign_name,
@@ -541,7 +535,7 @@ function Dashboard(){
       })).map(r=>({...r,rev:r.revenue,purch:r.purchases}));
       setCampRaw(campParsed);
 
-      // Adsets: filter to _MT campaigns at fetch (Angles/Landers tabs scope)
+      const adsetData=await fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo);
       const adsetParsed=adsetData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>{
         const parsed=parseMetaRow(r);
         return{
@@ -553,7 +547,7 @@ function Dashboard(){
       });
       setAdsetRaw(adsetParsed);
 
-      // Ads: keep all ads (existing Ads tab behavior).
+      const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
       const adParsed=adData.map(r=>{
         const parsed=parseMetaRow(r);
         return{
