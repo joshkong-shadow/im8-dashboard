@@ -939,6 +939,18 @@ function Dashboard(){
     return sorted.filter((r,i)=>i<10||r.d2?.p===cutoff);
   },[volumeAds]);
 
+  // ═══ DAILY ACTION ITEMS (Summary card) ════════════════════════════════════
+  // 1. Scale Up Today: campaigns where today's ROAS >= 1.0x AND > prior day
+  const actionScaleUp=useMemo(()=>campD.filter(r=>r.d2&&r.d1&&r.d2.roas>=1.0&&r.d2.roas>r.d1.roas).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0)),[campD]);
+  // 2. Scaling Funnels Picking Up: scale-tagged angles where ROAS up AND spend up
+  const actionScalingUp=useMemo(()=>sumScaling.filter(r=>r.d2&&r.d1&&r.d2.roas>r.d1.roas&&r.d2.s>r.d1.s),[sumScaling]);
+  // 2.5 Scaling Funnels NOT Picking Up: scale-tagged angles where ROAS dropped
+  const actionScalingDown=useMemo(()=>sumScaling.filter(r=>r.d2&&r.d1&&r.d2.roas<r.d1.roas).sort((a,b)=>(a.d2?.roas||0)-(b.d2?.roas||0)),[sumScaling]);
+  // 3. Top 3 Landers by today's CVR (min $250 spend today to filter noise)
+  const actionTopCvrLanders=useMemo(()=>lnD.filter(r=>r.d2&&r.d2.s>=250&&r.d2.cvr>0).sort((a,b)=>(b.d2?.cvr||0)-(a.d2?.cvr||0)).slice(0,3),[lnD]);
+  // 3.5 Top Spend Landers with <1% CVR — waste at lander level
+  const actionLowCvrLanders=useMemo(()=>lnD.filter(r=>r.d2&&r.d2.s>0&&r.d2.cvr<1.0).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0)),[lnD]);
+
   // Campaign drill-down: adsets belonging to clicked campaign
   const campDrillData=useMemo(()=>{
     if(!campDrill)return[];
@@ -1168,6 +1180,92 @@ function Dashboard(){
         ' | [Brackets] = 7d (',React.createElement('b',{style:{color:'#586880'}},w7Label),')',
         lastFetch&&React.createElement('span',{style:{marginLeft:12}},'Last fetch: '+lastFetch)
       ),
+
+      // ── DAILY ACTION ITEMS ──
+      (()=>{
+        const ineffTotal=ineffCamps.length+ineffAdsets.length+ineffAds.length;
+        const cardSection=(title,color,emoji,rows,emptyMsg,cols,limit)=>{
+          const visible=rows.slice(0,limit||5);
+          return React.createElement('div',{style:{marginBottom:16,padding:'10px 14px',background:'#0f172a',border:'1px solid #1e293b',borderRadius:6}},
+            React.createElement('div',{style:{fontSize:12,fontWeight:700,color,marginBottom:6}},emoji+' '+title,
+              rows.length>0&&React.createElement('span',{style:{fontSize:10,color:'#64748b',fontWeight:500,marginLeft:8}},'('+rows.length+' total)')
+            ),
+            rows.length===0
+              ? React.createElement('div',{style:{color:'#475569',fontSize:11,padding:'6px 0'}},emptyMsg)
+              : React.createElement('div',{style:{overflowX:'auto'}},
+                  React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',marginTop:4}},
+                    React.createElement('thead',null,React.createElement('tr',null,
+                      React.createElement('th',{style:{...S.th,padding:'4px 8px',width:24,textAlign:'center'}},'#'),
+                      cols.map((c,i)=>React.createElement('th',{key:i,style:{...S.th,padding:'4px 8px',textAlign:c.align||'left'}},c.label))
+                    )),
+                    React.createElement('tbody',null,visible.map((r,i)=>
+                      React.createElement('tr',{key:r.n,style:{borderTop:'1px solid #1e293b'}},
+                        React.createElement('td',{style:{...S.td,padding:'4px 8px',textAlign:'center',color:'#94a3b8',fontWeight:600,...S.mono,fontSize:11}},(i+1)),
+                        cols.map((c,j)=>React.createElement('td',{key:j,style:{...S.td,padding:'4px 8px',textAlign:c.align||'left'}},c.render(r)))
+                      )
+                    ))
+                  )
+                )
+          );
+        };
+        const fmtX=v=>v!=null?v.toFixed(2)+'x':'\u2014';
+        const fmtS=v=>v!=null?'$'+Math.round(v).toLocaleString():'\u2014';
+        const fmtN=v=>v!=null?Math.round(v).toLocaleString():'\u2014';
+        const fmtPct=v=>v!=null?v.toFixed(2)+'%':'\u2014';
+        const roasC=v=>v==null?'#94a3b8':v>=0.95?'#34d399':v>=0.7?'#fbbf24':'#f87171';
+        const arrow=(cur,prev)=>{if(cur==null||prev==null)return null;const d=cur-prev;if(Math.abs(d)<0.01)return null;return React.createElement('span',{style:{color:d>0?'#34d399':'#f87171',marginLeft:4,fontSize:11}},d>0?'\u2191':'\u2193');};
+        const nameCell=r=>React.createElement('div',{style:{wordBreak:'break-word',lineHeight:1.3,fontSize:11,color:'#e2e8f0',fontWeight:500,maxWidth:280}},r.n);
+        const roasCell=r=>React.createElement('span',{style:{...S.mono,fontSize:12,fontWeight:600,color:roasC(r.d2?.roas)}},fmtX(r.d2?.roas),React.createElement('span',{style:{color:'#586880',marginLeft:4,fontSize:10}},'(',fmtX(r.d1?.roas),')'),arrow(r.d2?.roas,r.d1?.roas));
+        const spendCell=r=>React.createElement('span',{style:{...S.mono,fontSize:12,color:'#e2e8f0'}},fmtS(r.d2?.s),React.createElement('span',{style:{color:'#586880',marginLeft:4,fontSize:10}},'(',fmtS(r.d1?.s),')'),arrow(r.d2?.s,r.d1?.s));
+        const cvrCell=r=>React.createElement('span',{style:{...S.mono,fontSize:12,fontWeight:600,color:r.d2?.cvr>=2?'#34d399':r.d2?.cvr>=1?'#fbbf24':'#f87171'}},fmtPct(r.d2?.cvr));
+        const purchCell=r=>React.createElement('span',{style:{...S.mono,fontSize:12,color:'#e2e8f0'}},fmtN(r.d2?.p));
+        const spendOnly=r=>React.createElement('span',{style:{...S.mono,fontSize:12,color:'#e2e8f0'}},fmtS(r.d2?.s));
+
+        return React.createElement('div',{style:{marginBottom:24,padding:16,background:'#0c1525',border:'1px solid #1e3a5f',borderRadius:8}},
+          React.createElement('div',{style:{fontSize:16,fontWeight:700,color:'#3b82f6',marginBottom:4}},'\uD83D\uDCCB Daily Action Items'),
+          React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:14}},'Action-first signals for today vs prior day. Tune thresholds as needed.'),
+
+          cardSection('Scale Up Today','#34d399','\u25B2',actionScaleUp,
+            'No campaigns hit the scale-up signal today (ROAS \u2265 1.0x AND rising vs prior day).',
+            [{label:'Campaign',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today / prior)',align:'right',render:spendCell}]
+          ),
+          cardSection('Scaling Funnels Picking Up','#a78bfa','\u26A1',actionScalingUp,
+            'No "scale"-tagged angles are accelerating today (ROAS up AND spend up vs prior).',
+            [{label:'Angle / Persona',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today / prior)',align:'right',render:spendCell}]
+          ),
+          cardSection('Scaling Funnels NOT Picking Up','#fb923c','\u26A0',actionScalingDown,
+            'No "scale"-tagged angles are deteriorating vs prior day.',
+            [{label:'Angle / Persona',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today)',align:'right',render:spendOnly}]
+          ),
+          cardSection('Top 3 Landers by CVR','#38bdf8','\uD83C\uDFAF',actionTopCvrLanders,
+            'No landers with $250+ spend and CVR data today.',
+            [{label:'Landing Page',render:nameCell},{label:'CVR (today)',align:'right',render:cvrCell},{label:'Purch',align:'right',render:purchCell},{label:'Spend',align:'right',render:spendOnly}],
+            3
+          ),
+          cardSection('Top Spend Landers with <1% CVR','#f97316','\uD83D\uDCB8',actionLowCvrLanders,
+            'No landers with sub-1% CVR today.',
+            [{label:'Landing Page',render:nameCell},{label:'Spend (today)',align:'right',render:spendOnly},{label:'CVR (today)',align:'right',render:cvrCell},{label:'Purch',align:'right',render:purchCell}]
+          ),
+          // Red Alert callout — points to the section below
+          React.createElement('div',{style:{marginTop:8,padding:'10px 14px',background:'#1a0a0a',border:'1px solid #3a1010',borderRadius:6,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}},
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#f87171',marginBottom:2}},'\uD83D\uDEA8 Red Alert Monitoring'),
+              React.createElement('div',{style:{fontSize:11,color:'#94a3b8'}},
+                ineffMainLoading||activeAdsLoading
+                  ? 'Loading inefficiency data...'
+                  : ineffTotal===0
+                    ? 'No inefficiencies right now \u2014 nothing to consider pausing.'
+                    : React.createElement('span',null,
+                        React.createElement('b',{style:{color:'#f87171'}},ineffCamps.length+' camp'),' / ',
+                        React.createElement('b',{style:{color:'#f87171'}},ineffAdsets.length+' adset'),' / ',
+                        React.createElement('b',{style:{color:'#f87171'}},ineffAds.length+' ad'),' burning spend with poor ROAS \u2014 review before pausing.'
+                      )
+              )
+            ),
+            React.createElement('button',{onClick:()=>{document.getElementById('red-alert-monitoring')?.scrollIntoView({behavior:'smooth'});},style:{background:'#1e293b',border:'1px solid #3a1010',borderRadius:4,padding:'5px 12px',color:'#f87171',fontSize:11,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}},'View details \u2193')
+          )
+        );
+      })(),
 
       // ── S1: HIGH POTENTIAL CAMPAIGNS ──
       React.createElement('div',{style:{marginBottom:24}},
@@ -1467,11 +1565,11 @@ function Dashboard(){
                 )
           );
         };
-        return React.createElement('div',{style:{marginBottom:24}},
+        return React.createElement('div',{id:'red-alert-monitoring',style:{marginBottom:24}},
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:8,flexWrap:'wrap',gap:8}},
             React.createElement('div',null,
-              React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#f87171'}},'\u26A0 Inefficiency Summary'),
-              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},'Top 10 underperformers per level — p7d ROAS < 0.5 with $250+ spend. Top = p7d, below = p14d.')
+              React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#f87171'}},'\uD83D\uDEA8 Red Alert Monitoring'),
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},'Top 10 underperformers per level (ACTIVE only) — p7d ROAS < 0.5 with $250+ spend. Top = p7d, below = p14d.')
             ),
             React.createElement('button',{onClick:()=>{setTab('inefficiencies');setEp(null);},style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'5px 12px',color:'#3b82f6',fontSize:11,fontWeight:600,cursor:'pointer'}},'View full Inefficiencies tab \u2192')
           ),
