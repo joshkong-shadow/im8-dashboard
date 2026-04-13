@@ -479,7 +479,13 @@ function Dashboard(){
   const[ineffCampExpanded,setIneffCampExpanded]=useState(null);
   const[ineffAdsetExpanded,setIneffAdsetExpanded]=useState(null);
   const[ineffAdExpanded,setIneffAdExpanded]=useState(null);
-  // Two-step ad fetch: p7d candidates come from main adLevelRaw; p14/p28
+  // Inefficiencies tab does its own fetches on tab open so the main flow
+  // (used by every other tab) stays lean and fast.
+  const[ineffCampRaw,setIneffCampRaw]=useState([]);
+  const[ineffAdsetRaw,setIneffAdsetRaw]=useState([]);
+  const[ineffMainLoading,setIneffMainLoading]=useState(false);
+  const[ineffMainError,setIneffMainError]=useState('');
+  // Two-step ad fetch: p7d candidates come from main adLevelRaw; p14
   // data is fetched on-demand for those candidate ad IDs (Meta silently
   // caps wide account-wide ad-level fetches).
   const[ineffAdLongRaw,setIneffAdLongRaw]=useState([]);
@@ -514,20 +520,20 @@ function Dashboard(){
   const fetchData=useCallback(async()=>{
     if(!config)return;
     setLoading(true);setError('');
-    // Wide range covers p14d for campaign+adset Inefficiencies aggregations.
-    // Narrow range (no p14d) is used for ad-level — Meta silently caps wide
-    // account-wide ad-level requests; p14 ad data is fetched on-demand per
-    // inefficient ad ID via fetchAdInsightsByIds.
-    const wideDates=[curFrom,curTo,priFrom,priTo,w7From,w14From];
-    const wideFrom=wideDates.reduce((a,b)=>a<=b?a:b);
-    const wideTo=wideDates.reduce((a,b)=>a>=b?a:b);
-    const narrowDates=[curFrom,curTo,priFrom,priTo,w7From];
-    const narrowFrom=narrowDates.reduce((a,b)=>a<=b?a:b);
-    const narrowTo=narrowDates.reduce((a,b)=>a>=b?a:b);
+    // Original narrow range. Inefficiencies tab does its own fetches on demand
+    // so the main flow stays lean and other tabs are unaffected.
+    const allDates=[curFrom,curTo,priFrom,priTo,w7From];
+    const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
+    const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
     try{
-      // Fetch campaign-level insights — store ALL campaigns (filter _MT at consumption)
-      const campData=await fetchInsights(config.token,config.accountId,'campaign',wideFrom,wideTo);
-      const campParsed=campData.map(r=>({
+      // Run the 3 main fetches in parallel
+      const [campData,adsetData,adData]=await Promise.all([
+        fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo),
+        fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo),
+        fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo),
+      ]);
+      // Campaigns: filter to _MT at fetch (matches original Campaigns tab scope)
+      const campParsed=campData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>({
         name: r.campaign_name,
         rawName: r.campaign_name,
         day: r.date_start,
@@ -535,9 +541,8 @@ function Dashboard(){
       })).map(r=>({...r,rev:r.revenue,purch:r.purchases}));
       setCampRaw(campParsed);
 
-      // Fetch adset-level insights — store ALL adsets (filter _MT/_ALT at consumption)
-      const adsetData=await fetchInsights(config.token,config.accountId,'adset',wideFrom,wideTo);
-      const adsetParsed=adsetData.map(r=>{
+      // Adsets: filter to _MT campaigns at fetch (Angles/Landers tabs scope)
+      const adsetParsed=adsetData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>{
         const parsed=parseMetaRow(r);
         return{
           name: r.adset_name||'Unknown',
@@ -548,9 +553,7 @@ function Dashboard(){
       });
       setAdsetRaw(adsetParsed);
 
-      // Fetch ad-level insights at narrow range (covers p7d). Inefficiencies
-      // tab fetches p14/p28 separately, scoped to inefficient ad IDs only.
-      const adData=await fetchInsights(config.token,config.accountId,'ad',narrowFrom,narrowTo);
+      // Ads: keep all ads (existing Ads tab behavior).
       const adParsed=adData.map(r=>{
         const parsed=parseMetaRow(r);
         return{
@@ -583,13 +586,13 @@ function Dashboard(){
       }
     }
     setLoading(false);
-  },[config,curFrom,curTo,priFrom,priTo,w7From,w14From]);
+  },[config,curFrom,curTo,priFrom,priTo,w7From]);
 
   // Auto-fetch on config load or date change
   useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
 
-  // Process adsets with overrides — _ALT filter + _MT campaign filter for angles/landers tabs
-  const ads=useMemo(()=>adsetRaw.filter(r=>/_ALT/.test(r.name)&&/_MT/.test(r.campaign||'')).map(r=>{
+  // Process adsets with overrides — _ALT filter only (adsetRaw is already _MT-scoped)
+  const ads=useMemo(()=>adsetRaw.filter(r=>/_ALT/.test(r.name)).map(r=>{
     const o=ov[r.name]||{};
     return{...r,angle:o.angle||autoAngle(r.name),lander:o.lander||autoLander(r.name)};
   }),[adsetRaw,ov]);
@@ -626,7 +629,7 @@ function Dashboard(){
   },[adsetRaw]);
   const campD=useMemo(()=>{
     const g={};
-    for(const r of campRaw){if(!/_MT/.test(r.name))continue;const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    for(const r of campRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
     return Object.entries(g).map(([n,rows])=>({n,...aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To),cnt:campAdsetCounts[n]||0})).sort((a,b)=>b.tot.s-a.tot.s);
   },[campRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,campAdsetCounts]);
 
@@ -649,22 +652,41 @@ function Dashboard(){
     return{p7:sumRange(w7From,curTo),p14:sumRange(w14From,curTo)};
   },[w7From,w14From,curTo]);
 
+  // Lazy-fetch unfiltered campaign + adset data for Inefficiencies tab on
+  // tab open. Other tabs use the main filtered fetch.
+  useEffect(()=>{
+    if(tab!=='inefficiencies'||!config)return;
+    if(ineffCampRaw.length>0||ineffMainLoading)return; // already loaded/loading
+    setIneffMainLoading(true);setIneffMainError('');
+    Promise.all([
+      fetchInsights(config.token,config.accountId,'campaign',w14From,curTo),
+      fetchInsights(config.token,config.accountId,'adset',w14From,curTo),
+    ]).then(([campData,adsetData])=>{
+      const camps=campData.map(r=>{const p=parseMetaRow(r);return{name:r.campaign_name,day:r.date_start,spend:p.spend,purch:p.purchases,rev:p.revenue,atc:p.atc,lpv:p.lpv};});
+      const adsets=adsetData.map(r=>{const p=parseMetaRow(r);return{name:r.adset_name||'Unknown',campaign:r.campaign_name||'',day:r.date_start,spend:p.spend,purch:p.purchases,rev:p.revenue,atc:p.atc,lpv:p.lpv};});
+      setIneffCampRaw(camps);setIneffAdsetRaw(adsets);setIneffMainLoading(false);
+    }).catch(e=>{setIneffMainError(e.message);setIneffMainLoading(false);});
+  },[tab,config,w14From,curTo,ineffCampRaw.length,ineffMainLoading]);
+
+  // Reset ineff campaign/adset cache when date window changes
+  useEffect(()=>{setIneffCampRaw([]);setIneffAdsetRaw([]);},[w14From,curTo]);
+
   // Inefficiency filter: p7d ROAS < 0.5 AND p7d spend >= $250, sorted by p7d spend desc
   const ineffCamps=useMemo(()=>{
     const g={};
-    for(const r of campRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
-    return Object.entries(g).map(([n,rows])=>({n,...aggregateIneff(rows),cnt:campAdsetCounts[n]||0}))
+    for(const r of ineffCampRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    return Object.entries(g).map(([n,rows])=>({n,...aggregateIneff(rows)}))
       .filter(r=>r.p7.s>=250&&r.p7.roas<0.5)
       .sort((a,b)=>b.p7.s-a.p7.s);
-  },[campRaw,aggregateIneff,campAdsetCounts]);
+  },[ineffCampRaw,aggregateIneff]);
 
   const ineffAdsets=useMemo(()=>{
     const g={};
-    for(const r of adsetRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    for(const r of ineffAdsetRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
     return Object.entries(g).map(([n,rows])=>({n,campaign:rows[0]?.campaign||'',...aggregateIneff(rows)}))
       .filter(r=>r.p7.s>=250&&r.p7.roas<0.5)
       .sort((a,b)=>b.p7.s-a.p7.s);
-  },[adsetRaw,aggregateIneff]);
+  },[ineffAdsetRaw,aggregateIneff]);
 
   // Step 1: candidates from main adLevelRaw using p7d filter
   const ineffAdCandidates=useMemo(()=>{
@@ -1793,15 +1815,20 @@ function Dashboard(){
             ' | Below = ',React.createElement('b',{style:{color:'#586880'}},'p14d (',w14Lbl,')'),
             lastFetch&&React.createElement('span',{style:{marginLeft:12,color:'#475569'}},'Last fetch: '+lastFetch)
           ),
-          // Diagnostic row — show fetched row counts so we can tell if API returned data
+          // Diagnostic row — separate loading state for ineff campaign/adset fetch
           React.createElement('div',{style:{marginTop:6,fontSize:10,color:'#475569'}},
-            'Fetched rows: ',
-            React.createElement('b',{style:{color:campRaw.length>0?'#34d399':'#f87171'}},campRaw.length+' campaign'),
-            ' | ',React.createElement('b',{style:{color:adsetRaw.length>0?'#34d399':'#f87171'}},adsetRaw.length+' adset'),
-            ' | ',React.createElement('b',{style:{color:adLevelRaw.length>0?'#34d399':'#f87171'}},adLevelRaw.length+' ad (p7d source)'),
+            'Ineff data: ',
+            ineffMainLoading
+              ? React.createElement('span',{style:{color:'#fbbf24'}},React.createElement('span',{className:'spinner',style:{width:10,height:10,marginRight:4,verticalAlign:'middle'}}),'Loading all campaigns + adsets (14d)...')
+              : React.createElement('span',null,
+                  React.createElement('b',{style:{color:ineffCampRaw.length>0?'#34d399':'#586880'}},ineffCampRaw.length+' campaign rows'),
+                  ' | ',React.createElement('b',{style:{color:ineffAdsetRaw.length>0?'#34d399':'#586880'}},ineffAdsetRaw.length+' adset rows')
+                ),
+            ' | ',React.createElement('b',{style:{color:adLevelRaw.length>0?'#34d399':'#586880'}},adLevelRaw.length+' ad rows (p7d, from main)'),
             ineffAdLongLoading&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},React.createElement('span',{className:'spinner',style:{width:10,height:10,marginRight:4,verticalAlign:'middle'}}),'Loading p14d for '+ineffAdCandidates.length+' inefficient ads...'),
             !ineffAdLongLoading&&ineffAdLongRaw.length>0&&React.createElement('span',{style:{marginLeft:12,color:'#34d399'}},ineffAdLongRaw.length+' rows for p14d'),
             ineffAdLongError&&React.createElement('span',{style:{marginLeft:12,color:'#f87171'}},'p14d fetch error: '+ineffAdLongError),
+            ineffMainError&&React.createElement('span',{style:{marginLeft:12,color:'#f87171'}},'ineff fetch error: '+ineffMainError),
             error&&React.createElement('span',{style:{marginLeft:12,color:'#fbbf24'}},'API error: '+error)
           )
         ),
