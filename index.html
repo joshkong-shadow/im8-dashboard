@@ -1410,10 +1410,10 @@ function Dashboard(){
 
       // ── S8: INEFFICIENCY SUMMARY ──
       (()=>{
-        const renderTable=(rows,level,color,title,emoji)=>{
+        const renderTable=(rows,level,color,title)=>{
           const top=rows.slice(0,10);
           return React.createElement('div',{key:level,style:{marginBottom:18}},
-            React.createElement('div',{style:{fontSize:13,fontWeight:700,color,marginBottom:6}},emoji+' '+title,
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color,marginBottom:6}},title,
               React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:500,marginLeft:8}},'('+rows.length+' total wasting spend)')
             ),
             top.length===0
