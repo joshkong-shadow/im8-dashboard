@@ -87,6 +87,31 @@ const fetchActiveAdIds = (token, accountId) => fetchActiveEntityIds(token, accou
 const fetchActiveAdsetIds = (token, accountId) => fetchActiveEntityIds(token, accountId, 'adsets');
 const fetchActiveCampaignIds = (token, accountId) => fetchActiveEntityIds(token, accountId, 'campaigns');
 
+// Fetch active entities WITH metadata (for Campaign Mgmt tab: daily_budget, bid_strategy).
+async function fetchActiveEntitiesWithMeta(token, accountId, endpoint, extraFields){
+  const out = [];
+  const params = new URLSearchParams({
+    access_token: token,
+    fields: 'id,name,'+extraFields,
+    filtering: JSON.stringify([{field:'effective_status', operator:'IN', value:['ACTIVE']}]),
+    limit: '500',
+  });
+  let url = `${META_API}/act_${accountId}/${endpoint}?${params}`;
+  while(url){
+    const resp = await fetch(url);
+    if(!resp.ok){
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const json = await resp.json();
+    out.push(...(json.data || []));
+    url = json.paging?.next || null;
+  }
+  return out;
+}
+const fetchActiveCampaignsMeta = (token, accountId) => fetchActiveEntitiesWithMeta(token, accountId, 'campaigns', 'daily_budget,bid_strategy,status,effective_status');
+const fetchActiveAdsetsMeta = (token, accountId) => fetchActiveEntitiesWithMeta(token, accountId, 'adsets', 'daily_budget,campaign_id');
+
 // Fetch ad-level insights scoped to specific ad IDs (used for the
 // Inefficiencies p14/p28 secondary fetch — Meta silently caps full
 // account-wide ad-level fetches over wide date ranges).
@@ -520,6 +545,14 @@ function Dashboard(){
   const[drillDown,setDrillDown]=useState(null); // {type:'angle'|'lander', name:'...'}
   // Copy-to-clipboard status for Daily Action Items button
   const[copyStatus,setCopyStatus]=useState(''); // '' | 'copied' | 'error'
+  // Campaign Management tab state
+  const[campMgmtCampsMeta,setCampMgmtCampsMeta]=useState(null);     // active campaigns with daily_budget/bid_strategy
+  const[campMgmtAdsetsMeta,setCampMgmtAdsetsMeta]=useState(null);   // active adsets with daily_budget (for ABO sum)
+  const[campMgmtLoading,setCampMgmtLoading]=useState(false);
+  const[campMgmtError,setCampMgmtError]=useState('');
+  const[scaleRoasUpper,setScaleRoasUpper]=useState(()=>LS.get('scale_roas_upper',1.2));
+  const[scaleRoasLower,setScaleRoasLower]=useState(()=>LS.get('scale_roas_lower',0.6));
+  const[campMgmtCopyStatus,setCampMgmtCopyStatus]=useState('');
   // Inefficiencies tab state
   const[ineffCampLimit,setIneffCampLimit]=useState(30);
   const[ineffAdsetLimit,setIneffAdsetLimit]=useState(30);
@@ -705,10 +738,11 @@ function Dashboard(){
     return{p7:sumRange(w7From,curTo),p14:sumRange(w14From,curTo)};
   },[w7From,w14From,curTo]);
 
-  // Lazy-fetch unfiltered campaign + adset data for the Inefficiencies tab
-  // and the Inefficiencies Summary section. Other tabs use the main filtered fetch.
+  // Lazy-fetch unfiltered campaign + adset data for the Inefficiencies tab,
+  // the Inefficiencies Summary section, and the Campaign Management tab.
+  // Other tabs use the main filtered fetch.
   useEffect(()=>{
-    if((tab!=='inefficiencies'&&tab!=='summary')||!config)return;
+    if((tab!=='inefficiencies'&&tab!=='summary'&&tab!=='campmgmt')||!config)return;
     if(ineffCampRaw.length>0||ineffMainLoading)return; // already loaded/loading
     setIneffMainLoading(true);setIneffMainError('');
     Promise.all([
@@ -724,10 +758,28 @@ function Dashboard(){
   // Reset ineff campaign/adset cache when date window changes
   useEffect(()=>{setIneffCampRaw([]);setIneffAdsetRaw([]);},[w14From,curTo]);
 
+  // Lazy-fetch active campaigns + adsets WITH metadata (budget, bid strategy)
+  // for the Campaign Management tab.
+  useEffect(()=>{
+    if(tab!=='campmgmt'||!config)return;
+    if(campMgmtCampsMeta!==null||campMgmtLoading)return;
+    setCampMgmtLoading(true);setCampMgmtError('');
+    Promise.all([
+      fetchActiveCampaignsMeta(config.token,config.accountId),
+      fetchActiveAdsetsMeta(config.token,config.accountId),
+    ]).then(([camps,adsets])=>{
+      setCampMgmtCampsMeta(camps);setCampMgmtAdsetsMeta(adsets);setCampMgmtLoading(false);
+    }).catch(e=>{setCampMgmtError(e.message);setCampMgmtLoading(false);});
+  },[tab,config,campMgmtCampsMeta,campMgmtLoading]);
+
+  // Also trigger the existing ineff camp/adset insights fetch on campmgmt tab
+  // (for p7d + today/prior insights). Existing effect already covers summary
+  // and inefficiencies — we just need it to fire on campmgmt too.
+
   // Lazy-fetch active entity IDs (campaigns + adsets + ads, in parallel)
   // used by Inefficiencies to exclude paused/archived entries.
   useEffect(()=>{
-    if((tab!=='inefficiencies'&&tab!=='summary')||!config)return;
+    if((tab!=='inefficiencies'&&tab!=='summary'&&tab!=='campmgmt')||!config)return;
     if(activeAdIds!==null||activeAdsLoading)return; // already loaded/loading
     setActiveAdsLoading(true);setActiveAdsError('');
     Promise.all([
@@ -1099,6 +1151,181 @@ function Dashboard(){
     return L.join('\n');
   },[curTo,actionScaleUp,actionScalingUp,actionScalingDown,actionTopCvrLanders,actionLowCvrLanders,ineffCamps,ineffAdsets,ineffAds,ineffYesterdayCounts,notes]);
 
+  // ═══ CAMPAIGN MANAGEMENT TAB DATA ═══════════════════════════════════════
+  // Friendly bid strategy labels
+  const bidStrategyLabel=(raw)=>{
+    const m={
+      'LOWEST_COST_WITHOUT_CAP':'High Volume',
+      'LOWEST_COST_WITH_BID_CAP':'Bid Cap',
+      'COST_CAP':'Cost Cap',
+      'LOWEST_COST_WITH_MIN_ROAS':'Min ROAS',
+    };
+    return m[raw]||raw||'—';
+  };
+
+  // Computes per-campaign daily_budget: campaign-level if set, else sum of adset-level
+  const campaignBudgetMap=useMemo(()=>{
+    if(campMgmtCampsMeta===null)return {};
+    const adsetByCamp={};
+    for(const a of (campMgmtAdsetsMeta||[])){
+      const cid=a.campaign_id;
+      if(!cid)continue;
+      const b=parseInt(a.daily_budget||'0',10);
+      if(!Number.isFinite(b))continue;
+      adsetByCamp[cid]=(adsetByCamp[cid]||0)+b;
+    }
+    const out={};
+    for(const c of campMgmtCampsMeta){
+      const campBudget=parseInt(c.daily_budget||'0',10);
+      out[c.id]={
+        budget: campBudget>0 ? campBudget/100 : (adsetByCamp[c.id]||0)/100,  // cents → dollars
+        bidStrategy: bidStrategyLabel(c.bid_strategy),
+        name: c.name,
+      };
+    }
+    return out;
+  },[campMgmtCampsMeta,campMgmtAdsetsMeta]);
+
+  // Main Campaign Mgmt list: today/prior/p7d per campaign, ACTIVE + today spend > 0
+  const campMgmtList=useMemo(()=>{
+    if(campMgmtCampsMeta===null||ineffCampRaw.length===0)return [];
+    const g={};
+    for(const r of ineffCampRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    const sumRange=(rows,from,to)=>{
+      let s=0,p=0,rev=0;
+      for(const x of rows){if(x.day>=from&&x.day<=to){s+=x.spend;p+=x.purch;rev+=x.rev;}}
+      return{s,p,roas:s>0?rev/s:0,cpp:p>0?s/p:null};
+    };
+    const out=[];
+    for(const c of campMgmtCampsMeta){
+      const rows=g[c.name]||[];
+      const d2=sumRange(rows,curTo,curTo);
+      if(d2.s<=0)continue; // skip no-spend campaigns
+      const d1=sumRange(rows,(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-1);return fmt(d);})(),(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-1);return fmt(d);})());
+      // p7d including today (curTo-6 to curTo)
+      const p7=sumRange(rows,w7From,curTo);
+      const budgetInfo=campaignBudgetMap[c.id]||{budget:0,bidStrategy:'—'};
+      out.push({
+        id:c.id, name:c.name,
+        budget:budgetInfo.budget, bidStrategy:budgetInfo.bidStrategy,
+        d2, d1, p7,
+      });
+    }
+    return out.sort((a,b)=>b.d2.s-a.d2.s);
+  },[campMgmtCampsMeta,ineffCampRaw,curTo,w7From,campaignBudgetMap]);
+
+  // Header overview totals
+  const campMgmtOverview=useMemo(()=>{
+    let s2=0,p2=0,r2=0,s1=0,p1=0,r1=0;
+    for(const c of campMgmtList){
+      s2+=c.d2.s; p2+=c.d2.p; r2+=c.d2.s*c.d2.roas;
+      s1+=c.d1.s; p1+=c.d1.p; r1+=c.d1.s*c.d1.roas;
+    }
+    return{
+      d2:{s:s2,p:p2,roas:s2>0?r2/s2:0,cpp:p2>0?s2/p2:null},
+      d1:{s:s1,p:p1,roas:s1>0?r1/s1:0,cpp:p1>0?s1/p1:null},
+    };
+  },[campMgmtList]);
+
+  // Insight cross-references per campaign
+  const campMgmtInsights=useMemo(()=>{
+    // Map campaign name -> set of angle names whose adsets live inside it
+    const campToAngles={};
+    for(const a of adsetRaw){
+      if(!/_ALT/.test(a.name))continue;
+      const angle=(ov[a.name]||{}).angle||autoAngle(a.name);
+      if(!campToAngles[a.campaign])campToAngles[a.campaign]=new Set();
+      campToAngles[a.campaign].add(angle);
+    }
+    const ineffCampNames=new Set(ineffCamps.map(c=>c.n));
+    const result={};
+    for(const c of campMgmtList){
+      const badges=[];
+      // Scaling angle present
+      const angles=campToAngles[c.name]||new Set();
+      for(const angle of angles){
+        const desc=notes['angles::'+angle];
+        if(desc&&/scale/i.test(desc)){badges.push({type:'scaling',label:'\u26A1 Scaling Angle Present',color:'#a78bfa'});break;}
+      }
+      // Scale-up candidate
+      if(c.d2.roas>=1.0&&c.d1&&c.d2.roas>c.d1.roas){
+        badges.push({type:'scaleup',label:'\u25B2 Scale-Up Candidate',color:'#34d399'});
+      }
+      // Red alert
+      if(ineffCampNames.has(c.name)){
+        badges.push({type:'redalert',label:'\uD83D\uDEA8 In Red Alert',color:'#f87171'});
+      }
+      result[c.name]=badges;
+    }
+    return result;
+  },[campMgmtList,adsetRaw,ov,notes,ineffCamps]);
+
+  // Strategic recommendation from guardrails
+  const recommendationFor=(roas,upper,lower)=>{
+    const u=parseFloat(upper),l=parseFloat(lower);
+    if(!Number.isFinite(u)||!Number.isFinite(l))return 'Set guardrails to see recommendation';
+    if(roas>=u)return 'Scale up budget (ROAS \u2265 '+u.toFixed(2)+'x)';
+    if(roas<l)return 'Drop budget (ROAS < '+l.toFixed(2)+'x)';
+    return 'Hold';
+  };
+
+  // Save guardrails to localStorage
+  useEffect(()=>{LS.set('scale_roas_upper',scaleRoasUpper);},[scaleRoasUpper]);
+  useEffect(()=>{LS.set('scale_roas_lower',scaleRoasLower);},[scaleRoasLower]);
+
+  // Build text report for copy-to-clipboard
+  const buildCampMgmtText=useCallback(()=>{
+    const fmtS=v=>v!=null?'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'\u2014';
+    const fmtSint=v=>v!=null?'$'+Math.round(v).toLocaleString():'\u2014';
+    const fmtX=v=>v!=null?v.toFixed(2):'\u2014';
+    const fmtN=v=>v!=null?Math.round(v).toLocaleString():'\u2014';
+    const roasDot=r=>r>=1.0?'\uD83D\uDFE2':r>=0.7?'\uD83D\uDFE0':'\uD83D\uDD34';
+    const cppDot=(cur,prev)=>{if(cur==null||prev==null)return '';return cur<=prev?'\uD83D\uDFE2':'\uD83D\uDD34';};
+    const dateLabel=new Date(curTo+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const dayBeforeD=new Date(curTo+'T12:00:00');dayBeforeD.setDate(dayBeforeD.getDate()-1);
+    const dayBeforeLabel=dayBeforeD.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+    const L=[];
+    L.push('\uD83D\uDD39 META Daily Performance Report \u2014 '+dateLabel+' vs '+dayBeforeLabel);
+    L.push('');
+    L.push('\uD83D\uDCCA Overview');
+    L.push('\uD83D\uDCB0 Meta Spend: '+fmtS(campMgmtOverview.d2.s)+' ('+fmtS(campMgmtOverview.d1.s)+')');
+    L.push('\uD83D\uDCC8 Meta ROAS: '+fmtX(campMgmtOverview.d2.roas)+' ('+fmtX(campMgmtOverview.d1.roas)+') '+roasDot(campMgmtOverview.d2.roas));
+    L.push('\uD83D\uDCCA Meta CPP: '+fmtS(campMgmtOverview.d2.cpp)+' ('+fmtS(campMgmtOverview.d1.cpp)+')');
+    L.push('');
+
+    campMgmtList.forEach((c,i)=>{
+      L.push((i+1)+'. '+c.name);
+      L.push('Ad Account Name: '+(config?.accountName||'—'));
+      L.push('•  Daily Budget: '+(c.budget>0?'$'+c.budget.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'\u2014'));
+      L.push('•  Bid Strategy: '+c.bidStrategy);
+      L.push('•  Spend: '+fmtS(c.d2.s)+' ('+fmtS(c.d1.s)+')');
+      L.push('•  ROAS: '+fmtX(c.d2.roas)+' ('+fmtX(c.d1.roas)+') '+roasDot(c.d2.roas)+' [L7D ROAS: '+fmtX(c.p7.roas)+']');
+      L.push('•  Purchases: '+fmtN(c.d2.p)+' ('+fmtN(c.d1.p)+')');
+      L.push('•  CPP: '+fmtS(c.d2.cpp)+' ('+fmtS(c.d1.cpp)+') '+cppDot(c.d2.cpp,c.d1.cpp)+' [L7D CPP: '+fmtS(c.p7.cpp)+']');
+      const badges=campMgmtInsights[c.name]||[];
+      if(badges.length>0){
+        L.push('•  Insights: '+badges.map(b=>b.label).join(' · '));
+      }
+      L.push(' Strategic Recommendation: '+recommendationFor(c.d2.roas,scaleRoasUpper,scaleRoasLower));
+      L.push('');
+    });
+
+    return L.join('\n').replace(/\n+$/,'');
+  },[campMgmtList,campMgmtOverview,campMgmtInsights,config,curTo,scaleRoasUpper,scaleRoasLower]);
+
+  const handleCopyCampMgmt=useCallback(async()=>{
+    try{
+      const text=buildCampMgmtText();
+      await navigator.clipboard.writeText(text);
+      setCampMgmtCopyStatus('copied');
+      setTimeout(()=>setCampMgmtCopyStatus(''),2500);
+    }catch(e){
+      setCampMgmtCopyStatus('error');
+      setTimeout(()=>setCampMgmtCopyStatus(''),2500);
+    }
+  },[buildCampMgmtText]);
+
   const handleCopyActionItems=useCallback(async()=>{
     try{
       const text=buildDailyActionItemsText();
@@ -1183,7 +1410,7 @@ function Dashboard(){
 
     // Tabs
     React.createElement('div',{style:{display:'flex',gap:2,marginBottom:12,borderBottom:'1px solid #1e293b',overflowX:'auto'}},
-      [{id:'summary',l:'Summary'},{id:'campaigns',l:'Campaigns'},{id:'angles',l:'Ad Angles / Personas'},{id:'landers',l:'Landing Pages'},{id:'ads',l:'Ads'},{id:'snapshot',l:'Ads Snapshot'},{id:'inefficiencies',l:'Inefficiencies'}].map(t=>
+      [{id:'summary',l:'Summary'},{id:'campaigns',l:'Campaigns'},{id:'angles',l:'Ad Angles / Personas'},{id:'landers',l:'Landing Pages'},{id:'ads',l:'Ads'},{id:'snapshot',l:'Ads Snapshot'},{id:'inefficiencies',l:'Inefficiencies'},{id:'campmgmt',l:'Campaign Mgmt'}].map(t=>
         React.createElement('button',{key:t.id,onClick:()=>{setTab(t.id);setEp(null);},style:{padding:'10px 14px',border:'none',cursor:'pointer',background:'transparent',whiteSpace:'nowrap',borderBottom:tab===t.id?'2px solid #3b82f6':'2px solid transparent',color:tab===t.id?'#e2e8f0':'#64748b',fontSize:13,fontWeight:600}},t.l)
       )
     ),
@@ -2276,6 +2503,138 @@ function Dashboard(){
         renderSection('Campaigns','#f87171','\uD83D\uDD25',ineffCamps,ineffCampLimit,setIneffCampLimit,'campaign',ineffCampExpanded,setIneffCampExpanded),
         renderSection('Adsets','#fb923c','\uD83D\uDCCA',ineffAdsets,ineffAdsetLimit,setIneffAdsetLimit,'adset',ineffAdsetExpanded,setIneffAdsetExpanded),
         renderSection('Ads','#facc15','\uD83C\uDFAF',ineffAds,ineffAdLimit,setIneffAdLimit,'ad',ineffAdExpanded,setIneffAdExpanded)
+      );
+    })(),
+
+    // ═══ CAMPAIGN MANAGEMENT TAB ═══════════════════════════════════════════════
+    tab==='campmgmt'&&(()=>{
+      const fmtS=v=>v!=null?'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'\u2014';
+      const fmtX=v=>v!=null?v.toFixed(2)+'x':'\u2014';
+      const fmtN=v=>v!=null?Math.round(v).toLocaleString():'\u2014';
+      const roasColor=r=>r==null?'#94a3b8':r>=1.0?'#34d399':r>=0.7?'#fb923c':'#f87171';
+      const roasDot=r=>r==null?'':r>=1.0?'\uD83D\uDFE2':r>=0.7?'\uD83D\uDFE0':'\uD83D\uDD34';
+      const cppDot=(cur,prev)=>cur==null||prev==null?'':cur<=prev?'\uD83D\uDFE2':'\uD83D\uDD34';
+      const isReady=campMgmtCampsMeta!==null&&ineffCampRaw.length>0;
+      const dateLabel=new Date(curTo+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const dayBefore=new Date(curTo+'T12:00:00');dayBefore.setDate(dayBefore.getDate()-1);
+      const dayBeforeLabel=dayBefore.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+      return React.createElement('div',{style:{paddingBottom:40}},
+        // Header bar: copy button + guardrails
+        React.createElement('div',{style:{marginBottom:16,padding:14,background:'#0c1525',border:'1px solid #1e3a5f',borderRadius:8,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#3b82f6'}},'\uD83D\uDD39 META Daily Performance Report'),
+            React.createElement('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},dateLabel+' vs '+dayBeforeLabel+' \u2014 ACTIVE campaigns with today\u2019s spend > $0, sorted by spend')
+          ),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10}},
+            campMgmtCopyStatus==='copied'&&React.createElement('span',{style:{fontSize:11,color:'#34d399',fontWeight:600}},'\u2713 Copied'),
+            campMgmtCopyStatus==='error'&&React.createElement('span',{style:{fontSize:11,color:'#f87171',fontWeight:600}},'\u2717 Copy failed'),
+            React.createElement('button',{onClick:handleCopyCampMgmt,disabled:!isReady,style:{background:isReady?'#1e40af':'#1e293b',border:'1px solid #3b82f6',borderRadius:6,padding:'8px 16px',color:'#e2e8f0',fontSize:12,fontWeight:700,cursor:isReady?'pointer':'default',opacity:isReady?1:0.5,whiteSpace:'nowrap'}},'\uD83D\uDCCB Copy Report')
+          )
+        ),
+
+        // Scale Guardrails inputs
+        React.createElement('div',{style:{marginBottom:16,padding:12,background:'#0c1220',border:'1px solid #1e293b',borderRadius:8,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}},
+          React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#94a3b8'}},'Scale Guardrails (ROAS):'),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
+            React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'Scale if \u2265'),
+            React.createElement('input',{type:'number',step:'0.01',min:'0',value:scaleRoasUpper,onChange:e=>setScaleRoasUpper(parseFloat(e.target.value)||0),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'4px 8px',color:'#e2e8f0',fontSize:12,width:80,outline:'none',...S.mono}}),
+            React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'x')
+          ),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
+            React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'Drop if <'),
+            React.createElement('input',{type:'number',step:'0.01',min:'0',value:scaleRoasLower,onChange:e=>setScaleRoasLower(parseFloat(e.target.value)||0),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'4px 8px',color:'#e2e8f0',fontSize:12,width:80,outline:'none',...S.mono}}),
+            React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'x')
+          ),
+          React.createElement('div',{style:{fontSize:10,color:'#586880',flex:'1 1 100%'}},'Between thresholds \u2192 Hold. Saved automatically.')
+        ),
+
+        // Loading / error states
+        (campMgmtLoading||ineffMainLoading||activeAdsLoading)&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+          React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
+          campMgmtLoading?'Loading active campaigns + adset budgets...':ineffMainLoading?'Loading campaign insights (14d)...':'Loading active statuses...'
+        ),
+        campMgmtError&&React.createElement('div',{style:{color:'#f87171',fontSize:12,padding:12,background:'#260a0a',borderRadius:6,marginBottom:12}},'Error: '+campMgmtError),
+
+        // Overview block
+        isReady&&React.createElement('div',{style:{marginBottom:20,padding:14,background:'#0c1220',border:'1px solid #1e293b',borderRadius:8}},
+          React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#94a3b8',marginBottom:8}},'\uD83D\uDCCA Overview'),
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:14,...S.mono,fontSize:13}},
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:2}},'\uD83D\uDCB0 Meta Spend'),
+              React.createElement('div',{style:{color:'#e2e8f0',fontWeight:600}},fmtS(campMgmtOverview.d2.s)),
+              React.createElement('div',{style:{fontSize:11,color:'#64748b'}},'prior: '+fmtS(campMgmtOverview.d1.s))
+            ),
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:2}},'\uD83D\uDCC8 Meta ROAS'),
+              React.createElement('div',{style:{color:roasColor(campMgmtOverview.d2.roas),fontWeight:600}},fmtX(campMgmtOverview.d2.roas)+' '+roasDot(campMgmtOverview.d2.roas)),
+              React.createElement('div',{style:{fontSize:11,color:'#64748b'}},'prior: '+fmtX(campMgmtOverview.d1.roas))
+            ),
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:2}},'\uD83D\uDCCA Meta CPP'),
+              React.createElement('div',{style:{color:'#e2e8f0',fontWeight:600}},fmtS(campMgmtOverview.d2.cpp)),
+              React.createElement('div',{style:{fontSize:11,color:'#64748b'}},'prior: '+fmtS(campMgmtOverview.d1.cpp))
+            ),
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:2}},'Campaigns (ACTIVE, >$0)'),
+              React.createElement('div',{style:{color:'#e2e8f0',fontWeight:600}},campMgmtList.length)
+            )
+          )
+        ),
+
+        // Per-campaign cards
+        isReady&&campMgmtList.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+          'No active campaigns with spend today.'
+        ),
+        isReady&&campMgmtList.map((c,i)=>{
+          const badges=campMgmtInsights[c.name]||[];
+          const rec=recommendationFor(c.d2.roas,scaleRoasUpper,scaleRoasLower);
+          const recColor=rec.startsWith('Scale')?'#34d399':rec.startsWith('Drop')?'#f87171':rec.startsWith('Hold')?'#fbbf24':'#64748b';
+          return React.createElement('div',{key:c.id||c.name,style:{marginBottom:12,padding:14,background:'#0c1220',border:'1px solid #1e293b',borderRadius:8}},
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:8,flexWrap:'wrap'}},
+              React.createElement('div',{style:{flex:1,minWidth:0}},
+                React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},(i+1)+'. '+c.name),
+                React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},'Ad Account: '+(config?.accountName||'—'))
+              )
+            ),
+            React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10,...S.mono,fontSize:12,marginBottom:10}},
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#64748b'}},'Daily Budget: '),
+                React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},c.budget>0?fmtS(c.budget):'\u2014')
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#64748b'}},'Bid: '),
+                React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},c.bidStrategy)
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#64748b'}},'Spend: '),
+                React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtS(c.d2.s)),
+                React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:11}},'('+fmtS(c.d1.s)+')')
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#64748b'}},'ROAS: '),
+                React.createElement('span',{style:{color:roasColor(c.d2.roas),fontWeight:600}},fmtX(c.d2.roas)+' '+roasDot(c.d2.roas)),
+                React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:11}},'('+fmtX(c.d1.roas)+')'),
+                React.createElement('span',{style:{color:'#586880',marginLeft:6,fontSize:11}},'[L7D: '+fmtX(c.p7.roas)+']')
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#64748b'}},'Purch: '),
+                React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(c.d2.p)),
+                React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:11}},'('+fmtN(c.d1.p)+')')
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#64748b'}},'CPP: '),
+                React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtS(c.d2.cpp)+' '+cppDot(c.d2.cpp,c.d1.cpp)),
+                React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:11}},'('+fmtS(c.d1.cpp)+')'),
+                React.createElement('span',{style:{color:'#586880',marginLeft:6,fontSize:11}},'[L7D: '+fmtS(c.p7.cpp)+']')
+              )
+            ),
+            badges.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}},
+              badges.map((b,j)=>React.createElement('span',{key:j,style:{fontSize:10,fontWeight:600,color:b.color,background:'#0a1020',border:'1px solid '+b.color+'40',padding:'3px 8px',borderRadius:4}},b.label))
+            ),
+            React.createElement('div',{style:{fontSize:12,fontWeight:700,color:recColor,borderTop:'1px solid #1e293b',paddingTop:8}},'\u2192 Strategic Recommendation: '+rec)
+          );
+        })
       );
     })(),
 
