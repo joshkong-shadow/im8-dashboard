@@ -448,6 +448,36 @@
     "260408_HEALTHCONDITIONDRIVEN_Health Lander_ALT*": {
       "lander": "Health Conditions",
       "angle": "Health Conditions"
+    },
+    "260318 ANGLE 7: Gut Health _ALT* [GvsC]": {
+      "angle": "Gut Health"
+    },
+    "260317 Collagen Restorer ICP#2_ALT* [GvsC]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260317 GLP-1#2_GLP1 lander_ALT* [GvsC]": {
+      "angle": "GLP-1"
+    },
+    "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES  > 16IN1DRJAMES Lander_ALT* [GvsC]": {
+      "angle": "DrJames"
+    },
+    "260401_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT* [GvsC]": {
+      "angle": "Weight"
+    },
+    "260413 GLP-1#2_PDPPRO lander_ALT* [GvsC]": {
+      "angle": "GLP-1"
+    },
+    "260413_WEIGHT MANAGEMENT SEEKER_PDPPRO_ALT* [GvsC]": {
+      "angle": "Weight"
+    },
+    "260413 ANGLE 7: Gut Health PDPPRO_ALT* [GvsC]": {
+      "angle": "Gut Health"
+    },
+    "260413 Collagen Restorer ICP#2 PDPPRO_ALT* [GvsC]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260413 Dr James Dinic (IG Posts)  > PDPPRO Lander_ALT* [GvsC]": {
+      "angle": "DrJames"
     }
   },
   "notes": {
