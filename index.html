@@ -807,9 +807,9 @@ function Dashboard(){
   useEffect(()=>{setIneffCampRaw([]);setIneffAdsetRaw([]);},[w14From,curTo]);
 
   // Lazy-fetch active campaigns + adsets WITH metadata (budget, bid strategy)
-  // for the Campaign Management tab.
+  // for Campaign Mgmt tab + Save Reports button (Summary tab also needs it).
   useEffect(()=>{
-    if(tab!=='campmgmt'||!config)return;
+    if((tab!=='campmgmt'&&tab!=='summary')||!config)return;
     if(campMgmtCampsMeta!==null||campMgmtLoading)return;
     setCampMgmtLoading(true);setCampMgmtError('');
     Promise.all([
@@ -1471,7 +1471,16 @@ function Dashboard(){
         React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
-        React.createElement('button',{onClick:publishReportsToGithub,disabled:publishingReports,title:'Save Daily Action Items + Campaign Mgmt reports to GitHub (reports/latest.md)',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishingReports?0.6:1,background:'#1e3a5f',color:'#bfdbfe'}},publishingReports?'Saving...':'\uD83D\uDCE4 Save Reports'),
+        (()=>{
+          const dataReady=campMgmtCampsMeta!==null&&ineffCampRaw.length>0&&activeCampIds!==null&&activeAdsetIds!==null&&activeAdIds!==null;
+          const disabledReason=!dataReady?'Waiting for data to load (campaign metadata, inefficiency data, active entity IDs) before Save Reports can commit accurate content':'Save Daily Action Items + Campaign Mgmt reports to GitHub';
+          return React.createElement('button',{
+            onClick:publishReportsToGithub,
+            disabled:publishingReports||!dataReady,
+            title:disabledReason,
+            style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:(publishingReports||!dataReady)?0.5:1,background:'#1e3a5f',color:'#bfdbfe',cursor:(publishingReports||!dataReady)?'not-allowed':'pointer'}
+          },publishingReports?'Saving...':(!dataReady?'\u23F3 Loading data...':'\uD83D\uDCE4 Save Reports'));
+        })(),
         publishReportsMsg&&React.createElement('span',{style:{fontSize:10,color:publishReportsMsg.startsWith('Error')?'#f87171':'#34d399'}},publishReportsMsg),
       )
     ),
