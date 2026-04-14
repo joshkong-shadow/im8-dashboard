@@ -1472,8 +1472,8 @@ function Dashboard(){
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
         (()=>{
-          const dataReady=campMgmtCampsMeta!==null&&ineffCampRaw.length>0&&activeCampIds!==null&&activeAdsetIds!==null&&activeAdIds!==null;
-          const disabledReason=!dataReady?'Waiting for data to load (campaign metadata, inefficiency data, active entity IDs) before Save Reports can commit accurate content':'Save Daily Action Items + Campaign Mgmt reports to GitHub';
+          const dataReady=!loading&&campMgmtCampsMeta!==null&&ineffCampRaw.length>0&&activeCampIds!==null&&activeAdsetIds!==null&&activeAdIds!==null&&adsetRaw.length>0&&adLevelRaw.length>0;
+          const disabledReason=!dataReady?'Waiting for all data to load (main fetch + campaign metadata + inefficiency data + active entity IDs) before Save Reports can commit accurate content':'Save Daily Action Items + Campaign Mgmt reports to GitHub';
           return React.createElement('button',{
             onClick:publishReportsToGithub,
             disabled:publishingReports||!dataReady,
