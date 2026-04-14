@@ -518,6 +518,8 @@ function Dashboard(){
   const[volumeLimit,setVolumeLimit]=useState(25);
   const[campDrill,setCampDrill]=useState(null);
   const[drillDown,setDrillDown]=useState(null); // {type:'angle'|'lander', name:'...'}
+  // Copy-to-clipboard status for Daily Action Items button
+  const[copyStatus,setCopyStatus]=useState(''); // '' | 'copied' | 'error'
   // Inefficiencies tab state
   const[ineffCampLimit,setIneffCampLimit]=useState(30);
   const[ineffAdsetLimit,setIneffAdsetLimit]=useState(30);
@@ -992,6 +994,123 @@ function Dashboard(){
   // 3.5 Top Spend Landers with <1% CVR — waste at lander level
   const actionLowCvrLanders=useMemo(()=>lnD.filter(r=>r.d2&&r.d2.s>0&&r.d2.cvr<1.0).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0)),[lnD]);
 
+  // Build Daily Action Items as plaintext for copy-to-clipboard
+  const buildDailyActionItemsText=useCallback(()=>{
+    const fmtS=v=>v!=null?'$'+Math.round(v).toLocaleString():'\u2014';
+    const fmtX=v=>v!=null?v.toFixed(2)+'x':'\u2014';
+    const fmtPct=v=>v!=null?v.toFixed(2)+'%':'\u2014';
+    const fmtN=v=>v!=null?Math.round(v).toLocaleString():'\u2014';
+    const SEP='\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
+    const L=[];
+    const dateLabel=new Date(curTo+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    L.push('\uD83D\uDCCB IM8 Daily Action Items \u2014 '+dateLabel);
+    L.push(SEP);
+
+    if(actionScaleUp.length>0){
+      L.push(''); L.push('\u25B2 SCALE UP TODAY ('+actionScaleUp.length+')');
+      L.push('Campaigns \u2014 ROAS \u2265 1.0x AND up vs yesterday'); L.push('');
+      actionScaleUp.forEach((c,i)=>{
+        L.push((i+1)+'. '+c.n);
+        L.push('   '+fmtX(c.d2?.roas)+' \u2191 (was '+fmtX(c.d1?.roas)+') \u00B7 '+fmtS(c.d2?.s));
+      });
+      L.push(''); L.push(SEP);
+    }
+
+    if(actionScalingUp.length>0){
+      L.push(''); L.push('\u26A1 SCALING FUNNELS PICKING UP ('+actionScalingUp.length+')');
+      L.push('Scale-tagged angles \u2014 ROAS up AND spend up'); L.push('');
+      actionScalingUp.forEach((a,i)=>{
+        L.push((i+1)+'. '+a.n);
+        const desc=notes['angles::'+a.n];
+        if(desc) L.push('   "'+desc+'"');
+        L.push('   ROAS '+fmtX(a.d2?.roas)+' \u2191 (was '+fmtX(a.d1?.roas)+')');
+        L.push('   Spend '+fmtS(a.d2?.s)+' \u2191 (was '+fmtS(a.d1?.s)+')');
+      });
+      L.push(''); L.push(SEP);
+    }
+
+    if(actionScalingDown.length>0){
+      L.push(''); L.push('\u26A0 NOT PICKING UP ('+actionScalingDown.length+')');
+      L.push('Scale-tagged angles \u2014 ROAS dropped vs yesterday'); L.push('');
+      actionScalingDown.forEach((a,i)=>{
+        L.push((i+1)+'. '+a.n);
+        const desc=notes['angles::'+a.n];
+        if(desc) L.push('   "'+desc+'"');
+        L.push('   ROAS '+fmtX(a.d2?.roas)+' \u2193 (was '+fmtX(a.d1?.roas)+')');
+        L.push('   Spend '+fmtS(a.d2?.s));
+      });
+      L.push(''); L.push(SEP);
+    }
+
+    if(actionTopCvrLanders.length>0){
+      L.push(''); L.push('\uD83C\uDFAF TOP 3 LANDERS BY CVR');
+      L.push('Min $250 spend today'); L.push('');
+      actionTopCvrLanders.forEach((l,i)=>{
+        L.push((i+1)+'. '+l.n);
+        const desc=notes['landers::'+l.n];
+        if(desc) L.push('   "'+desc+'"');
+        L.push('   '+fmtPct(l.d2?.cvr)+' CVR \u00B7 '+fmtS(l.d2?.s)+' \u00B7 '+fmtN(l.d2?.p)+' purch');
+      });
+      L.push(''); L.push(SEP);
+    }
+
+    if(actionLowCvrLanders.length>0){
+      L.push(''); L.push('\uD83D\uDCB8 TOP SPEND, LOW CVR ('+actionLowCvrLanders.length+')');
+      L.push('Landers with CVR < 1.0% today'); L.push('');
+      actionLowCvrLanders.forEach((l,i)=>{
+        L.push((i+1)+'. '+l.n);
+        const desc=notes['landers::'+l.n];
+        if(desc) L.push('   "'+desc+'"');
+        L.push('   '+fmtS(l.d2?.s)+' \u00B7 '+fmtPct(l.d2?.cvr)+' CVR \u00B7 '+fmtN(l.d2?.p)+' purch');
+      });
+      L.push(''); L.push(SEP);
+    }
+
+    // Red Alert (always included)
+    L.push(''); L.push('\uD83D\uDEA8 RED ALERT MONITORING');
+    L.push('p7d ROAS < 0.5x \u00B7 $250+ spend \u00B7 ACTIVE only'); L.push('');
+    const tC=ineffCamps.length, tA=ineffAdsets.length, tAd=ineffAds.length;
+    const yC=ineffYesterdayCounts.camps, yA=ineffYesterdayCounts.adsets, yAd=ineffYesterdayCounts.ads;
+    L.push('Today:     '+tC+' camps \u00B7 '+tA+' adsets \u00B7 '+tAd+' ads');
+    L.push('Yesterday: '+(yC==null?'\u2026':yC)+' camps \u00B7 '+(yA==null?'\u2026':yA)+' adsets \u00B7 '+(yAd==null?'\u2026':yAd)+' ads');
+    if(yC!=null&&yA!=null&&yAd!=null){
+      const dc=tC-yC, da=tA-yA, dad=tAd-yAd;
+      const sgn=d=>d>0?'+':'';
+      L.push('Delta:     '+sgn(dc)+dc+' camp \u00B7 '+sgn(da)+da+' adsets \u00B7 '+sgn(dad)+dad+' ads');
+    }
+    if(ineffCamps.length>0){
+      L.push(''); L.push('Top offenders (p7d):');
+      ineffCamps.slice(0,3).forEach((c,i)=>{
+        L.push((i+1)+'. '+c.n);
+        L.push('   '+fmtS(c.p7?.s)+' \u00B7 '+fmtX(c.p7?.roas));
+      });
+    }
+    L.push(''); L.push('Full list \u2192 joshkong-shadow.github.io/im8-dashboard');
+
+    // Footer with MYT timestamp
+    L.push(''); L.push(SEP);
+    const now=new Date();
+    const mytMs=now.getTime()+(8*60*60*1000)+(now.getTimezoneOffset()*60*1000);
+    const myt=new Date(mytMs);
+    const pad=n=>String(n).padStart(2,'0');
+    const ts=myt.getFullYear()+'-'+pad(myt.getMonth()+1)+'-'+pad(myt.getDate())+' '+pad(myt.getHours())+':'+pad(myt.getMinutes());
+    L.push('Generated '+ts+' MYT');
+
+    return L.join('\n');
+  },[curTo,actionScaleUp,actionScalingUp,actionScalingDown,actionTopCvrLanders,actionLowCvrLanders,ineffCamps,ineffAdsets,ineffAds,ineffYesterdayCounts,notes]);
+
+  const handleCopyActionItems=useCallback(async()=>{
+    try{
+      const text=buildDailyActionItemsText();
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('copied');
+      setTimeout(()=>setCopyStatus(''),2500);
+    }catch(e){
+      setCopyStatus('error');
+      setTimeout(()=>setCopyStatus(''),2500);
+    }
+  },[buildDailyActionItemsText]);
+
   // Campaign drill-down: adsets belonging to clicked campaign
   const campDrillData=useMemo(()=>{
     if(!campDrill)return[];
@@ -1208,6 +1327,12 @@ function Dashboard(){
 
     // ═══ SUMMARY TAB ════════════════════════════════════════════════════════════
     tab==='summary'&&React.createElement('div',null,
+      // Copy Daily Action Items button — top of tab
+      React.createElement('div',{style:{marginBottom:12,display:'flex',justifyContent:'flex-end',alignItems:'center',gap:10}},
+        copyStatus==='copied'&&React.createElement('span',{style:{fontSize:11,color:'#34d399',fontWeight:600}},'\u2713 Copied to clipboard'),
+        copyStatus==='error'&&React.createElement('span',{style:{fontSize:11,color:'#f87171',fontWeight:600}},'\u2717 Copy failed'),
+        React.createElement('button',{onClick:handleCopyActionItems,style:{background:'#1e40af',border:'1px solid #3b82f6',borderRadius:6,padding:'8px 16px',color:'#e2e8f0',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}},'\uD83D\uDCCB Copy Daily Action Items')
+      ),
       // Loading
       loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
         React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
