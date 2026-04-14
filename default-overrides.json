@@ -450,34 +450,44 @@
       "angle": "Health Conditions"
     },
     "260318 ANGLE 7: Gut Health _ALT* [GvsC]": {
-      "angle": "Gut Health"
+      "angle": "Gut Health",
+      "lander": "GETGUT Lander"
     },
     "260317 Collagen Restorer ICP#2_ALT* [GvsC]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260317 GLP-1#2_GLP1 lander_ALT* [GvsC]": {
-      "angle": "GLP-1"
+      "angle": "GLP-1",
+      "lander": "GLP-1"
     },
     "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES  > 16IN1DRJAMES Lander_ALT* [GvsC]": {
-      "angle": "DrJames"
+      "angle": "DrJames",
+      "lander": "Dr James"
     },
     "260401_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT* [GvsC]": {
-      "angle": "Weight"
+      "angle": "Weight",
+      "lander": "Weight"
     },
     "260413 GLP-1#2_PDPPRO lander_ALT* [GvsC]": {
-      "angle": "GLP-1"
+      "angle": "GLP-1",
+      "lander": "Main-PDP"
     },
     "260413_WEIGHT MANAGEMENT SEEKER_PDPPRO_ALT* [GvsC]": {
-      "angle": "Weight"
+      "angle": "Weight",
+      "lander": "Main-PDP"
     },
     "260413 ANGLE 7: Gut Health PDPPRO_ALT* [GvsC]": {
-      "angle": "Gut Health"
+      "angle": "Gut Health",
+      "lander": "Main-PDP"
     },
     "260413 Collagen Restorer ICP#2 PDPPRO_ALT* [GvsC]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Main-PDP"
     },
     "260413 Dr James Dinic (IG Posts)  > PDPPRO Lander_ALT* [GvsC]": {
-      "angle": "DrJames"
+      "angle": "DrJames",
+      "lander": "Main-PDP"
     }
   },
   "notes": {
@@ -678,6 +688,7 @@
     "Dr James": "Ambassador",
     "Beauty": "Persona",
     "Health Conditions": "Persona",
-    "MIXED": "Mixed"
+    "MIXED": "Mixed",
+    "Main-PDP": "Main PDP"
   }
 }
