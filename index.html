@@ -494,6 +494,9 @@ function Dashboard(){
   // Publish overrides + notes to GitHub repo
   const[publishing,setPublishing]=useState(false);
   const[publishMsg,setPublishMsg]=useState('');
+  // Publish Daily Action Items + Campaign Mgmt reports to GitHub (overwrite)
+  const[publishingReports,setPublishingReports]=useState(false);
+  const[publishReportsMsg,setPublishReportsMsg]=useState('');
   const publishToGithub=useCallback(async()=>{
     let ghToken=LS.get('gh_token','');
     if(!ghToken){
@@ -529,6 +532,51 @@ function Dashboard(){
     }catch(e){setPublishMsg('Error: '+e.message);}
     setPublishing(false);
   },[ov,notes,buckets]);
+
+  // Publish both reports (Daily Action Items + Campaign Mgmt) as plaintext
+  // files in reports/. Overwrites each on every press; git history = audit trail.
+  const publishReportsToGithub=useCallback(async()=>{
+    let ghToken=LS.get('gh_token','');
+    if(!ghToken){
+      ghToken=prompt('Enter a GitHub Personal Access Token with repo scope.\nThis is stored in your browser only and never shared.');
+      if(!ghToken)return;
+      LS.set('gh_token',ghToken);
+    }
+    setPublishingReports(true);setPublishReportsMsg('');
+    const repo='joshkong-shadow/im8-dashboard';
+    const putFile=async(path,content,commitMsg)=>{
+      const getResp=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
+        headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json'}
+      });
+      const existing=getResp.ok?await getResp.json():null;
+      const sha=existing?.sha||undefined;
+      const body={message:commitMsg,content:btoa(unescape(encodeURIComponent(content)))};
+      if(sha)body.sha=sha;
+      const putResp=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
+        method:'PUT',
+        headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+        body:JSON.stringify(body)
+      });
+      if(!putResp.ok){
+        const err=await putResp.json().catch(()=>({}));
+        if(putResp.status===401||putResp.status===403){LS.set('gh_token','');throw new Error('Invalid token \u2014 cleared. Try again.');}
+        throw new Error(err.message||('GitHub API error '+putResp.status));
+      }
+    };
+    try{
+      const dateLabel=new Date(curTo+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const dai=buildDailyActionItemsText();
+      const cmm=buildCampMgmtText();
+      await Promise.all([
+        putFile('reports/daily-action-items-latest.md',dai,'Update daily action items report \u2014 '+dateLabel),
+        putFile('reports/campaign-mgmt-latest.md',cmm,'Update campaign mgmt report \u2014 '+dateLabel),
+      ]);
+      setPublishReportsMsg('Saved!');
+      setTimeout(()=>setPublishReportsMsg(''),3000);
+    }catch(e){setPublishReportsMsg('Error: '+e.message);}
+    setPublishingReports(false);
+  },[buildDailyActionItemsText,buildCampMgmtText,curTo]);
+
   const[campRaw,setCampRaw]=useState([]);
   const[adsetRaw,setAdsetRaw]=useState([]);
   const[adLevelRaw,setAdLevelRaw]=useState([]);
@@ -1423,6 +1471,8 @@ function Dashboard(){
         React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
+        React.createElement('button',{onClick:publishReportsToGithub,disabled:publishingReports,title:'Save Daily Action Items + Campaign Mgmt reports to GitHub (reports/latest.md)',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishingReports?0.6:1,background:'#1e3a5f',color:'#bfdbfe'}},publishingReports?'Saving...':'\uD83D\uDCE4 Save Reports'),
+        publishReportsMsg&&React.createElement('span',{style:{fontSize:10,color:publishReportsMsg.startsWith('Error')?'#f87171':'#34d399'}},publishReportsMsg),
       )
     ),
 
