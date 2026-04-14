@@ -1035,12 +1035,29 @@ function Dashboard(){
   },[volumeAds]);
 
   // ═══ DAILY ACTION ITEMS (Summary card) ════════════════════════════════════
-  // 1. Scale Up Today: campaigns where today's ROAS >= 1.0x AND > prior day
-  const actionScaleUp=useMemo(()=>campD.filter(r=>r.d2&&r.d1&&r.d2.roas>=1.0&&r.d2.roas>r.d1.roas).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0)),[campD]);
-  // 2. Scaling Funnels Picking Up: scale-tagged angles where ROAS up AND spend up
-  const actionScalingUp=useMemo(()=>sumScaling.filter(r=>r.d2&&r.d1&&r.d2.roas>r.d1.roas&&r.d2.s>r.d1.s),[sumScaling]);
-  // 2.5 Scaling Funnels NOT Picking Up: scale-tagged angles where ROAS dropped
-  const actionScalingDown=useMemo(()=>sumScaling.filter(r=>r.d2&&r.d1&&r.d2.roas<r.d1.roas).sort((a,b)=>(a.d2?.roas||0)-(b.d2?.roas||0)),[sumScaling]);
+  // 1. Scale Up Today: ALL active campaigns with today's spend > 0 AND today's ROAS >= 1.0x
+  //    (sourced from ineffCampRaw so we include non-_MT campaigns too)
+  const actionScaleUp=useMemo(()=>{
+    if(activeCampIds===null||ineffCampRaw.length===0)return [];
+    const g={};
+    for(const r of ineffCampRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    const sum=(rows,from,to)=>{let s=0,p=0,rev=0;for(const x of rows){if(x.day>=from&&x.day<=to){s+=x.spend;p+=x.purch;rev+=x.rev;}}return{s,p,roas:s>0?rev/s:0};};
+    const dayBefore=(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-1);return fmt(d);})();
+    const out=[];
+    for(const [n,rows] of Object.entries(g)){
+      const id=rows[0]?.id||'';
+      if(!activeCampIds.has(id))continue;
+      const d2=sum(rows,curTo,curTo);
+      if(d2.s<=0||d2.roas<1.0)continue;
+      const d1=sum(rows,dayBefore,dayBefore);
+      out.push({n,d2,d1});
+    }
+    return out.sort((a,b)=>b.d2.s-a.d2.s);
+  },[ineffCampRaw,activeCampIds,curTo]);
+  // 2. Scaling Funnels Picking Up: scale-tagged angles with today's ROAS > 0.8x
+  const actionScalingUp=useMemo(()=>sumScaling.filter(r=>r.d2&&r.d2.roas>0.8).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0)),[sumScaling]);
+  // 2.5 Scaling Funnels NOT Picking Up: scale-tagged angles with today's ROAS < 0.8x
+  const actionScalingDown=useMemo(()=>sumScaling.filter(r=>r.d2&&r.d2.roas<0.8).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0)),[sumScaling]);
   // 3. Top 3 Landers by today's CVR (min $250 spend today to filter noise)
   const actionTopCvrLanders=useMemo(()=>lnD.filter(r=>r.d2&&r.d2.s>=250&&r.d2.cvr>0).sort((a,b)=>(b.d2?.cvr||0)-(a.d2?.cvr||0)).slice(0,3),[lnD]);
   // 3.5 Top Spend Landers with <1% CVR — waste at lander level
@@ -1058,38 +1075,41 @@ function Dashboard(){
     L.push('\uD83D\uDCCB IM8 Daily Action Items \u2014 '+dateLabel);
     L.push(SEP);
 
+    // Trend arrow helper (only show when there's a clear direction)
+    const arrow=(cur,prev)=>{if(cur==null||prev==null)return '';const d=cur-prev;if(Math.abs(d)<0.001)return '';return d>0?' \u2191':' \u2193';};
+
     if(actionScaleUp.length>0){
       L.push(''); L.push('\u25B2 SCALE UP TODAY ('+actionScaleUp.length+')');
-      L.push('Campaigns \u2014 ROAS \u2265 1.0x AND up vs yesterday'); L.push('');
+      L.push('All active campaigns \u2014 today\u2019s ROAS \u2265 1.0x'); L.push('');
       actionScaleUp.forEach((c,i)=>{
         L.push((i+1)+'. '+c.n);
-        L.push('   '+fmtX(c.d2?.roas)+' \u2191 (was '+fmtX(c.d1?.roas)+') \u00B7 '+fmtS(c.d2?.s));
+        L.push('   '+fmtX(c.d2?.roas)+arrow(c.d2?.roas,c.d1?.roas)+' (was '+fmtX(c.d1?.roas)+') \u00B7 '+fmtS(c.d2?.s));
       });
       L.push(''); L.push(SEP);
     }
 
     if(actionScalingUp.length>0){
       L.push(''); L.push('\u26A1 SCALING FUNNELS PICKING UP ('+actionScalingUp.length+')');
-      L.push('Scale-tagged angles \u2014 ROAS up AND spend up'); L.push('');
+      L.push('Scale-tagged angles \u2014 today\u2019s ROAS > 0.8x'); L.push('');
       actionScalingUp.forEach((a,i)=>{
         L.push((i+1)+'. '+a.n);
         const desc=notes['angles::'+a.n];
         if(desc) L.push('   "'+desc+'"');
-        L.push('   ROAS '+fmtX(a.d2?.roas)+' \u2191 (was '+fmtX(a.d1?.roas)+')');
-        L.push('   Spend '+fmtS(a.d2?.s)+' \u2191 (was '+fmtS(a.d1?.s)+')');
+        L.push('   ROAS '+fmtX(a.d2?.roas)+arrow(a.d2?.roas,a.d1?.roas)+' (was '+fmtX(a.d1?.roas)+')');
+        L.push('   Spend '+fmtS(a.d2?.s)+arrow(a.d2?.s,a.d1?.s)+' (was '+fmtS(a.d1?.s)+')');
       });
       L.push(''); L.push(SEP);
     }
 
     if(actionScalingDown.length>0){
       L.push(''); L.push('\u26A0 NOT PICKING UP ('+actionScalingDown.length+')');
-      L.push('Scale-tagged angles \u2014 ROAS dropped vs yesterday'); L.push('');
+      L.push('Scale-tagged angles \u2014 today\u2019s ROAS < 0.8x'); L.push('');
       actionScalingDown.forEach((a,i)=>{
         L.push((i+1)+'. '+a.n);
         const desc=notes['angles::'+a.n];
         if(desc) L.push('   "'+desc+'"');
-        L.push('   ROAS '+fmtX(a.d2?.roas)+' \u2193 (was '+fmtX(a.d1?.roas)+')');
-        L.push('   Spend '+fmtS(a.d2?.s));
+        L.push('   ROAS '+fmtX(a.d2?.roas)+arrow(a.d2?.roas,a.d1?.roas)+' (was '+fmtX(a.d1?.roas)+')');
+        L.push('   Spend '+fmtS(a.d2?.s)+arrow(a.d2?.s,a.d1?.s)+' (was '+fmtS(a.d1?.s)+')');
       });
       L.push(''); L.push(SEP);
     }
@@ -1619,16 +1639,16 @@ function Dashboard(){
           React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:14}},'Action-first signals for today vs prior day. Tune thresholds as needed.'),
 
           cardSection('Scale Up Today','#34d399','\u25B2',actionScaleUp,
-            'No campaigns hit the scale-up signal today (ROAS \u2265 1.0x AND rising vs prior day).',
+            'No active campaigns with today\u2019s ROAS \u2265 1.0x.',
             [{label:'Campaign',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today / prior)',align:'right',render:spendCell}]
           ),
           cardSection('Scaling Funnels Picking Up','#a78bfa','\u26A1',actionScalingUp,
-            'No "scale"-tagged angles are accelerating today (ROAS up AND spend up vs prior).',
+            'No "scale"-tagged angles with today\u2019s ROAS > 0.8x.',
             [{label:'Angle / Persona',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today / prior)',align:'right',render:spendCell}]
           ),
           cardSection('Scaling Funnels NOT Picking Up','#fb923c','\u26A0',actionScalingDown,
-            'No "scale"-tagged angles are deteriorating vs prior day.',
-            [{label:'Angle / Persona',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today)',align:'right',render:spendOnly}]
+            'No "scale"-tagged angles with today\u2019s ROAS < 0.8x.',
+            [{label:'Angle / Persona',render:nameCell},{label:'ROAS (today / prior)',align:'right',render:roasCell},{label:'Spend (today / prior)',align:'right',render:spendCell}]
           ),
           cardSection('Top 3 Landers by CVR','#38bdf8','\uD83C\uDFAF',actionTopCvrLanders,
             'No landers with $250+ spend and CVR data today.',
