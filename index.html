@@ -564,6 +564,9 @@ function Dashboard(){
   const w7From=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-6);return fmt(d);},[curTo]);
   // 14-day trailing window used by Inefficiencies tab
   const w14From=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-13);return fmt(d);},[curTo]);
+  // Yesterday's p7d window (curTo-7 to curTo-1) — for Red Alert day-over-day
+  const p7YestFrom=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-7);return fmt(d);},[curTo]);
+  const p7YestTo=useMemo(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-1);return fmt(d);},[curTo]);
 
   const save=useCallback(nx=>{setOv(nx);LS.set('overrides',nx);},[]);
 
@@ -573,7 +576,8 @@ function Dashboard(){
   const fetchData=useCallback(async()=>{
     if(!config)return;
     setLoading(true);setError('');
-    const allDates=[curFrom,curTo,priFrom,priTo,w7From];
+    // p7YestFrom (curTo-7) added so ad-level data covers yesterday's p7d window for Red Alert day-over-day.
+    const allDates=[curFrom,curTo,priFrom,priTo,w7From,p7YestFrom];
     const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
     const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
     try{
@@ -633,7 +637,7 @@ function Dashboard(){
       }
     }
     setLoading(false);
-  },[config,curFrom,curTo,priFrom,priTo,w7From]);
+  },[config,curFrom,curTo,priFrom,priTo,w7From,p7YestFrom]);
 
   // Auto-fetch on config load or date change
   useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
@@ -791,6 +795,43 @@ function Dashboard(){
       };
     });
   },[ineffAdCandidates,ineffAdLongRaw,w14From,curTo]);
+
+  // Yesterday's p7d inefficiency counts — for Red Alert day-over-day
+  const ineffYesterdayCounts=useMemo(()=>{
+    const sum=(rows,from,to)=>{let s=0,r=0;for(const x of rows){if(x.day>=from&&x.day<=to){s+=x.spend;r+=x.rev;}}return{s,roas:s>0?r/s:0};};
+    const countIneff=(rawRows,idField,activeSet)=>{
+      if(activeSet===null)return null;
+      const g={};
+      for(const r of rawRows){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+      let n=0;
+      for(const rows of Object.values(g)){
+        const id=rows[0]?.[idField]||'';
+        if(!activeSet.has(id))continue;
+        const agg=sum(rows,p7YestFrom,p7YestTo);
+        if(agg.s>=250&&agg.roas<0.5)n++;
+      }
+      return n;
+    };
+    // For ads, the raw data uses different shape (day vs date_start) — inline variant
+    const countIneffAds=()=>{
+      if(activeAdIds===null)return null;
+      const g={};
+      for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+      let n=0;
+      for(const rows of Object.values(g)){
+        const adId=rows[0]?.adId||'';
+        if(!activeAdIds.has(adId))continue;
+        const agg=sum(rows,p7YestFrom,p7YestTo);
+        if(agg.s>=250&&agg.roas<0.5)n++;
+      }
+      return n;
+    };
+    return{
+      camps: countIneff(ineffCampRaw,'id',activeCampIds),
+      adsets: countIneff(ineffAdsetRaw,'id',activeAdsetIds),
+      ads: countIneffAds(),
+    };
+  },[ineffCampRaw,ineffAdsetRaw,adLevelRaw,activeCampIds,activeAdsetIds,activeAdIds,p7YestFrom,p7YestTo]);
 
   // CSV export for inefficiencies tables
   const exportIneffCSV=useCallback((rows,level,filename)=>{
@@ -1577,6 +1618,36 @@ function Dashboard(){
             React.createElement('span',{className:'spinner',style:{width:12,height:12,marginRight:6,verticalAlign:'middle'}}),'Loading inefficiency data (campaigns + adsets, 14d)...'
           ),
           ineffMainError&&React.createElement('div',{style:{color:'#f87171',fontSize:11,marginBottom:10,padding:'8px 12px',background:'#260a0a',borderRadius:6}},'Error loading inefficiency data: '+ineffMainError),
+          // Day-over-day count summary
+          (()=>{
+            const yC=ineffYesterdayCounts.camps, yA=ineffYesterdayCounts.adsets, yAd=ineffYesterdayCounts.ads;
+            const tC=ineffCamps.length, tA=ineffAdsets.length, tAd=ineffAds.length;
+            const deltaLine=(t,y)=>{
+              if(y===null)return React.createElement('span',{style:{color:'#586880'}},'—');
+              const d=t-y;
+              const color=d>0?'#f87171':d<0?'#34d399':'#586880';
+              const sign=d>0?'+':d<0?'':'';
+              return React.createElement('span',{style:{color,fontWeight:600}},sign+d);
+            };
+            return React.createElement('div',{style:{marginBottom:16,padding:'12px 16px',background:'#0c1220',border:'1px solid #3a1010',borderRadius:6,...S.mono,fontSize:12,lineHeight:1.8}},
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#94a3b8',display:'inline-block',width:88}},'Today:'),
+                React.createElement('span',{style:{color:'#f87171',fontWeight:600}},tC+' camps · '+tA+' adsets · '+tAd+' ads')
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#94a3b8',display:'inline-block',width:88}},'Yesterday:'),
+                React.createElement('span',{style:{color:'#64748b'}},
+                  (yC===null?'…':yC)+' camps · '+(yA===null?'…':yA)+' adsets · '+(yAd===null?'…':yAd)+' ads'
+                )
+              ),
+              React.createElement('div',null,
+                React.createElement('span',{style:{color:'#94a3b8',display:'inline-block',width:88}},'Delta:'),
+                deltaLine(tC,yC),React.createElement('span',{style:{color:'#586880'}},' camp · '),
+                deltaLine(tA,yA),React.createElement('span',{style:{color:'#586880'}},' adsets · '),
+                deltaLine(tAd,yAd),React.createElement('span',{style:{color:'#586880'}},' ads')
+              )
+            );
+          })(),
           renderTable(ineffCamps,'campaign','#f87171','\uD83D\uDD25 Top Wasting Campaigns'),
           renderTable(ineffAdsets,'adset','#fb923c','\uD83D\uDCCA Top Wasting Adsets'),
           renderTable(ineffAds,'ad','#facc15','\uD83C\uDFAF Top Wasting Ads')
