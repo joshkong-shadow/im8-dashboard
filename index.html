@@ -1421,11 +1421,32 @@ function Dashboard(){
                   ? 'Loading inefficiency data...'
                   : ineffTotal===0
                     ? 'No inefficiencies right now \u2014 nothing to consider pausing.'
-                    : React.createElement('span',null,
-                        React.createElement('b',{style:{color:'#f87171'}},ineffCamps.length+' camp'),' / ',
-                        React.createElement('b',{style:{color:'#f87171'}},ineffAdsets.length+' adset'),' / ',
-                        React.createElement('b',{style:{color:'#f87171'}},ineffAds.length+' ad'),' burning spend with poor ROAS \u2014 review before pausing.'
-                      )
+                    : (()=>{
+                        const tC=ineffCamps.length, tA=ineffAdsets.length, tAd=ineffAds.length;
+                        const yC=ineffYesterdayCounts.camps, yA=ineffYesterdayCounts.adsets, yAd=ineffYesterdayCounts.ads;
+                        const deltaSpan=(t,y)=>{
+                          if(y==null)return React.createElement('span',{style:{color:'#586880'}},'\u2014');
+                          const d=t-y;
+                          const color=d>0?'#f87171':d<0?'#34d399':'#586880';
+                          return React.createElement('span',{style:{color,fontWeight:600}},(d>0?'+':'')+d);
+                        };
+                        return React.createElement('div',{style:{...S.mono,fontSize:11,lineHeight:1.7}},
+                          React.createElement('div',null,
+                            React.createElement('span',{style:{color:'#94a3b8',display:'inline-block',width:80}},'Today:'),
+                            React.createElement('span',{style:{color:'#f87171',fontWeight:600}},tC+' camps \u00B7 '+tA+' adsets \u00B7 '+tAd+' ads')
+                          ),
+                          React.createElement('div',null,
+                            React.createElement('span',{style:{color:'#94a3b8',display:'inline-block',width:80}},'Yesterday:'),
+                            React.createElement('span',{style:{color:'#64748b'}},(yC==null?'\u2026':yC)+' camps \u00B7 '+(yA==null?'\u2026':yA)+' adsets \u00B7 '+(yAd==null?'\u2026':yAd)+' ads')
+                          ),
+                          React.createElement('div',null,
+                            React.createElement('span',{style:{color:'#94a3b8',display:'inline-block',width:80}},'Delta:'),
+                            deltaSpan(tC,yC),React.createElement('span',{style:{color:'#586880'}},' camp \u00B7 '),
+                            deltaSpan(tA,yA),React.createElement('span',{style:{color:'#586880'}},' adsets \u00B7 '),
+                            deltaSpan(tAd,yAd),React.createElement('span',{style:{color:'#586880'}},' ads')
+                          )
+                        );
+                      })()
               )
             ),
             React.createElement('button',{onClick:()=>{document.getElementById('red-alert-monitoring')?.scrollIntoView({behavior:'smooth'});},style:{background:'#1e293b',border:'1px solid #3a1010',borderRadius:4,padding:'5px 12px',color:'#f87171',fontSize:11,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}},'View details \u2193')
