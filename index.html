@@ -1067,7 +1067,7 @@ function Dashboard(){
       const adsetName=rows[0]?.adset||'';
       const d2=sumRange(rows,curFrom,curTo);
       const d1=sumRange(rows,priFrom,priTo);
-      if(d2.s<=0||d2.roas>=0.7)continue;
+      if(d2.s<200||d2.roas>=0.7)continue; // min $200 current-period spend
       const adsetD2Spend=adsetD2[adsetName]||0;
       if(adsetD2Spend<=0)continue;
       const ratio=d2.s/adsetD2Spend;
@@ -2772,7 +2772,10 @@ function Dashboard(){
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:8}},
             React.createElement('div',null,
               React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#fbbf24'}},'\uD83D\uDCB0 Budget Tankers'),
-              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},rows.length+' ad'+(rows.length!==1?'s':'')+' eating >75% of their adset\u2019s spend with ROAS < 0.7 \u2014 $'+Math.round(totalSpend).toLocaleString()+' wasted today (current period)')
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},
+                'Current period (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),') vs Prior (',React.createElement('b',{style:{color:'#586880'}},d1Label),') \u2014 ads taking >75% of adset\u2019s spend, ROAS < 0.7, min $200 spend.'
+              ),
+              React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},rows.length+' ad'+(rows.length!==1?'s':'')+' \u2014 $'+Math.round(totalSpend).toLocaleString()+' total wasted in current period')
             ),
             rows.length>0&&React.createElement('button',{onClick:()=>{
               const esc=v=>{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;};
