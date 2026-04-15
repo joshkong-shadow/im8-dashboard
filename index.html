@@ -988,13 +988,14 @@ function Dashboard(){
   },[tab,config,activeAdIds,activeAdsLoading]);
 
   // Inefficiency filter: p7d ROAS < 0.5 AND p7d spend >= $250, ACTIVE only,
-  // sorted by p7d spend desc
+  // p14d spend > p7d spend (= had spend in days 8-14, excludes brand-new
+  // entities that only spent in the last week), sorted by p7d spend desc
   const ineffCamps=useMemo(()=>{
     if(activeCampIds===null)return[]; // wait until active-status set is loaded
     const g={};
     for(const r of ineffCampRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
     return Object.entries(g).map(([n,rows])=>({n,id:rows[0]?.id||'',...aggregateIneff(rows)}))
-      .filter(r=>r.p7.s>=250&&r.p7.roas<0.5&&activeCampIds.has(r.id))
+      .filter(r=>r.p7.s>=250&&r.p7.roas<0.5&&activeCampIds.has(r.id)&&r.p14.s>r.p7.s+0.01)
       .sort((a,b)=>b.p7.s-a.p7.s);
   },[ineffCampRaw,aggregateIneff,activeCampIds]);
 
@@ -1003,7 +1004,7 @@ function Dashboard(){
     const g={};
     for(const r of ineffAdsetRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
     return Object.entries(g).map(([n,rows])=>({n,id:rows[0]?.id||'',campaign:rows[0]?.campaign||'',...aggregateIneff(rows)}))
-      .filter(r=>r.p7.s>=250&&r.p7.roas<0.5&&activeAdsetIds.has(r.id))
+      .filter(r=>r.p7.s>=250&&r.p7.roas<0.5&&activeAdsetIds.has(r.id)&&r.p14.s>r.p7.s+0.01)
       .sort((a,b)=>b.p7.s-a.p7.s);
   },[ineffAdsetRaw,aggregateIneff,activeAdsetIds]);
 
@@ -1023,7 +1024,9 @@ function Dashboard(){
   // (Effect kept as no-op for shape compatibility; if snapshot ever fails,
   // we'd fall back to direct Meta fetch here.)
 
-  // Combine p7 (from candidates) with p14 (from secondary fetch)
+  // Combine p7 (from candidates) with p14 (from snapshot ad rows). Also
+  // applies the p14 > p7 filter to drop brand-new ads that only spent
+  // in the last 7 days (no historical context to judge "inefficiency").
   const ineffAds=useMemo(()=>{
     if(ineffAdCandidates.length===0)return[];
     const longByName={};
@@ -1035,7 +1038,7 @@ function Dashboard(){
         ...c,
         p14: longRows.length?sumRange(longRows,w14From,curTo):{s:null,p:null,roas:null,cpa:null,atc:null,cvr:null},
       };
-    });
+    }).filter(r=>r.p14&&r.p14.s!=null&&r.p14.s>r.p7.s+0.01);
   },[ineffAdCandidates,ineffAdLongRaw,w14From,curTo]);
 
   // Yesterday's p7d inefficiency counts — for Red Alert day-over-day
@@ -1612,7 +1615,7 @@ function Dashboard(){
           )
         ),
         React.createElement('button',{onClick:fetchData,disabled:loading,title:'Re-read snapshot from GitHub (fast)',style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Reload'),
-        React.createElement('button',{onClick:handleRefreshSnapshot,disabled:refreshingSnapshot||loading,title:'Trigger a fresh pull from Meta via GitHub Actions. Takes ~2 min.',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:(refreshingSnapshot||loading)?0.6:1,background:'#1e3a5f',color:'#bfdbfe'}},refreshingSnapshot?'Refreshing...':'\uD83D\uDD04 Refresh Now'),
+        React.createElement('button',{onClick:handleRefreshSnapshot,disabled:refreshingSnapshot||loading,title:'Trigger a fresh pull from Meta via GitHub Actions. Takes ~2 min.',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:(refreshingSnapshot||loading)?0.6:1,background:'#1e3a5f',color:'#bfdbfe'}},refreshingSnapshot?'Refreshing...':'\uD83D\uDD04 Manual Refresh (Josh Only)'),
         refreshSnapshotMsg&&React.createElement('span',{style:{fontSize:10,color:refreshSnapshotMsg.startsWith('Error')?'#f87171':'#34d399'}},refreshSnapshotMsg),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
