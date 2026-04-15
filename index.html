@@ -91,6 +91,18 @@ async function loadSnapshot(){
   return {metadata,campIns,adsetIns,adIns,campsMeta,adsetsMeta,activeIds,creativesData};
 }
 
+// Lightweight check — fetch only metadata.json to see if a snapshot exists.
+// Used to bypass the Settings screen for read-only colleague users.
+async function checkSnapshotExists(){
+  try{
+    const resp = await fetch(`${SNAPSHOT_BASE}/metadata.json?t=${Date.now()}`);
+    if(!resp.ok) return null;
+    return await resp.json();
+  }catch(e){
+    return null;
+  }
+}
+
 // Trigger a manual snapshot refresh via GitHub Actions workflow_dispatch.
 async function triggerSnapshotRefresh(ghToken){
   const resp = await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/actions/workflows/snapshot.yml/dispatches',{
@@ -551,6 +563,9 @@ function Dashboard(){
   const[snapshotMeta,setSnapshotMeta]=useState(null);
   const[refreshingSnapshot,setRefreshingSnapshot]=useState(false);
   const[refreshSnapshotMsg,setRefreshSnapshotMsg]=useState('');
+  // Settings-bypass: while we check if a snapshot exists, show a brief spinner
+  // instead of flashing the Settings screen for read-only colleagues.
+  const[bootstrapping,setBootstrapping]=useState(true);
   const publishToGithub=useCallback(async()=>{
     let ghToken=LS.get('gh_token','');
     if(!ghToken){
@@ -708,6 +723,41 @@ function Dashboard(){
   const save=useCallback(nx=>{setOv(nx);LS.set('overrides',nx);},[]);
 
   const handleConfigSave=(cfg)=>{LS.set('config',cfg);setConfig(cfg);};
+
+  // On mount: if no config in localStorage, try to bypass Settings by
+  // creating a stub config from the snapshot metadata. Read-only users
+  // (colleagues) never need to enter a Meta token.
+  useEffect(()=>{
+    if(config){setBootstrapping(false);return;}
+    checkSnapshotExists().then(meta=>{
+      if(meta){
+        const stub={
+          token:'',
+          accountId:meta.account_id||'',
+          accountName:'IM8',
+        };
+        LS.set('config',stub);
+        setConfig(stub);
+      }
+      setBootstrapping(false);
+    });
+  },[]);
+
+  // Auto-poll for new snapshots every 5 minutes. If the metadata's
+  // fetched_at changes, reload data so users with the dashboard open
+  // see new scheduled snapshots automatically.
+  useEffect(()=>{
+    if(!config||!snapshotMeta)return;
+    const intervalId=setInterval(async()=>{
+      try{
+        const newMeta=await checkSnapshotExists();
+        if(newMeta&&newMeta.fetched_at!==snapshotMeta.fetched_at){
+          await fetchData();
+        }
+      }catch(e){/* silent — retry on next poll */}
+    },300000); // 5 min
+    return ()=>clearInterval(intervalId);
+  },[config,snapshotMeta,fetchData]);
 
   // Refresh Now: trigger the snapshot workflow via GitHub Actions dispatch,
   // then auto-reload data after ~2 min.
@@ -1522,6 +1572,9 @@ function Dashboard(){
   const allL=useMemo(()=>[...new Set(ads.map(a=>a.lander))].sort(),[ads]);
   const epAds=useMemo(()=>{if(!ep)return[];return[...new Set(ads.filter(a=>ep.type==="angle"?a.angle===ep.cat:a.lander===ep.cat).map(a=>a.name))];},[ep,ads]);
 
+  if(bootstrapping) return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'#64748b',fontSize:13,gap:12}},
+    React.createElement('span',{className:'spinner',style:{width:18,height:18}}),'Loading dashboard...'
+  );
   if(!config) return React.createElement(Settings,{onSave:handleConfigSave,initial:LS.get('config',{})});
 
   const data=tab==="campaigns"?fl(campD):tab==="angles"?fl(angD):tab==="landers"?fl(lnD):[];
