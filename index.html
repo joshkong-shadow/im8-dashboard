@@ -1666,7 +1666,7 @@ function Dashboard(){
     ),
 
     // Filters (not on ads/summary tab)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
       React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'Min Spend'),
       [0,100,500,1000,5000].map(v=>React.createElement('button',{key:v,onClick:()=>setFms(v),style:S.btn(fms===v)},v===0?'All':'$'+v.toLocaleString()+'+')),
       React.createElement('div',{style:{width:1,height:18,background:'#1e293b'}}),
@@ -1676,7 +1676,7 @@ function Dashboard(){
     ),
 
     // Legend (not on ads/summary tab)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
       'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
       ') | Below = Prior (',React.createElement('b',{style:{color:'#475569'}},d1Label),')',
       ' | [Brackets] = 7d (',React.createElement('b',{style:{color:'#586880'}},w7Label),')',
@@ -1686,7 +1686,7 @@ function Dashboard(){
     ),
 
     // Loading state (not on ads/summary tab for this block)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
       React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
       'Fetching data from Meta...'
     ),
@@ -1725,7 +1725,7 @@ function Dashboard(){
     ),
 
     // Table (not on ads/summary tab)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&(!loading||campRaw.length>0)?React.createElement('div',{style:{overflowX:'auto'}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&(!loading||campRaw.length>0)?React.createElement('div',{style:{overflowX:'auto'}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
         React.createElement('thead',null,React.createElement('tr',null,
           React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
