@@ -46,8 +46,19 @@ def _log(msg):
 
 def _get_json(url, timeout=120):
     req = urllib.request.Request(url, headers={"User-Agent": "im8-snapshot"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as e:
+        # Surface Meta's actual error message instead of a bare 400/500
+        body = ""
+        try:
+            body = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        # Strip access_token from URL for log safety
+        safe_url = url.split("access_token=")[0] + "access_token=REDACTED&" + url.split("&", 1)[-1] if "access_token=" in url else url
+        raise RuntimeError(f"HTTP {e.code} from Meta — body: {body[:500]} — url: {safe_url[:200]}") from e
 
 
 def _paginate(initial_url, timeout=120):
