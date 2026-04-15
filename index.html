@@ -59,6 +59,56 @@ let DEFAULT_OVERRIDES_PROMISE = fetch('./default-overrides.json').then(r=>r.ok?r
 // ═══ META API ═══════════════════════════════════════════════════════════════
 const META_API = 'https://graph.facebook.com/v21.0';
 
+// ═══ SNAPSHOT LOADER ═══════════════════════════════════════════════════════
+// In production, the dashboard reads pre-fetched Meta data from GitHub
+// (data/snapshots/*.json) instead of hitting Meta directly. A scheduled
+// workflow refreshes those files 3x/day. This eliminates browser-side
+// rate-limit hits entirely.
+const SNAPSHOT_BASE = 'https://raw.githubusercontent.com/joshkong-shadow/im8-dashboard/main/data/snapshots';
+const SNAPSHOT_SCHEMA_VERSION = 1;
+async function loadSnapshot(){
+  const fetchJSON = async (name) => {
+    // Cache-bust with a date-bucketed param so the browser picks up fresh
+    // snapshots without waiting for the CDN TTL to expire.
+    const url = `${SNAPSHOT_BASE}/${name}?t=${Date.now()}`;
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error(`${name}: ${resp.status}`);
+    return resp.json();
+  };
+  const [metadata,campIns,adsetIns,adIns,campsMeta,adsetsMeta,activeIds,creativesData]=await Promise.all([
+    fetchJSON('metadata.json'),
+    fetchJSON('campaigns-insights.json'),
+    fetchJSON('adsets-insights.json'),
+    fetchJSON('ads-insights.json'),
+    fetchJSON('campaigns-meta.json'),
+    fetchJSON('adsets-meta.json'),
+    fetchJSON('active-ids.json'),
+    fetchJSON('creatives.json'),
+  ]);
+  if(metadata?.schema_version !== SNAPSHOT_SCHEMA_VERSION){
+    throw new Error(`Snapshot schema version mismatch (got ${metadata?.schema_version}, expected ${SNAPSHOT_SCHEMA_VERSION}). Dashboard needs update.`);
+  }
+  return {metadata,campIns,adsetIns,adIns,campsMeta,adsetsMeta,activeIds,creativesData};
+}
+
+// Trigger a manual snapshot refresh via GitHub Actions workflow_dispatch.
+async function triggerSnapshotRefresh(ghToken){
+  const resp = await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/actions/workflows/snapshot.yml/dispatches',{
+    method:'POST',
+    headers:{
+      'Authorization':'token '+ghToken,
+      'Accept':'application/vnd.github.v3+json',
+      'Content-Type':'application/json',
+    },
+    body:JSON.stringify({ref:'main',inputs:{reason:'dashboard refresh'}}),
+  });
+  if(!resp.ok){
+    const err = await resp.json().catch(()=>({}));
+    throw new Error(err.message || `workflow_dispatch ${resp.status}`);
+  }
+  return true;
+}
+
 // Generic helper: fetch the set of currently-ACTIVE entity IDs at the given
 // level (ads, adsets, campaigns). Used by Inefficiencies to exclude
 // paused/archived entries from each report.
@@ -497,6 +547,10 @@ function Dashboard(){
   // Publish Daily Action Items + Campaign Mgmt reports to GitHub (overwrite)
   const[publishingReports,setPublishingReports]=useState(false);
   const[publishReportsMsg,setPublishReportsMsg]=useState('');
+  // Snapshot freshness + manual refresh state
+  const[snapshotMeta,setSnapshotMeta]=useState(null);
+  const[refreshingSnapshot,setRefreshingSnapshot]=useState(false);
+  const[refreshSnapshotMsg,setRefreshSnapshotMsg]=useState('');
   const publishToGithub=useCallback(async()=>{
     let ghToken=LS.get('gh_token','');
     if(!ghToken){
@@ -655,75 +709,118 @@ function Dashboard(){
 
   const handleConfigSave=(cfg)=>{LS.set('config',cfg);setConfig(cfg);};
 
-  // Fetch data from Meta
+  // Refresh Now: trigger the snapshot workflow via GitHub Actions dispatch,
+  // then auto-reload data after ~2 min.
+  const handleRefreshSnapshot=useCallback(async()=>{
+    let ghToken=LS.get('gh_token','');
+    if(!ghToken){
+      ghToken=prompt('Enter a GitHub Personal Access Token with repo + workflow scope.\nThis is stored in your browser only.');
+      if(!ghToken)return;
+      LS.set('gh_token',ghToken);
+    }
+    setRefreshingSnapshot(true);setRefreshSnapshotMsg('');
+    try{
+      await triggerSnapshotRefresh(ghToken);
+      setRefreshSnapshotMsg('Triggered! Auto-reloading in ~2 min...');
+      // Wait 2.5 min then auto-reload snapshot
+      setTimeout(async()=>{
+        setRefreshSnapshotMsg('Reloading fresh data...');
+        try{
+          await fetchData();
+          setRefreshSnapshotMsg('Updated!');
+        }catch(e){
+          setRefreshSnapshotMsg('Reload failed: '+e.message);
+        }
+        setTimeout(()=>setRefreshSnapshotMsg(''),4000);
+        setRefreshingSnapshot(false);
+      },150000); // 150s = 2.5 min
+    }catch(e){
+      setRefreshSnapshotMsg('Error: '+e.message);
+      setRefreshingSnapshot(false);
+      if(/401|403/.test(e.message)){LS.set('gh_token','');}
+    }
+  },[fetchData]);
+
+  // Snapshot-backed fetchData: reads pre-fetched JSONs from GitHub instead
+  // of hitting Meta. Populates every state var the dashboard depends on.
   const fetchData=useCallback(async()=>{
     if(!config)return;
-    setLoading(true);setError('');
-    // p7YestFrom (curTo-7) added so ad-level data covers yesterday's p7d window for Red Alert day-over-day.
-    const allDates=[curFrom,curTo,priFrom,priTo,w7From,p7YestFrom];
-    const dateFrom=allDates.reduce((a,b)=>a<=b?a:b);
-    const dateTo=allDates.reduce((a,b)=>a>=b?a:b);
+    setLoading(true);setIneffMainLoading(true);setActiveAdsLoading(true);setCampMgmtLoading(true);
+    setError('');
     try{
-      // Sequential fetch — original pattern. Each setX renders the matching
-      // tab as soon as data is ready (campaigns first, then adsets, then ads).
-      const campData=await fetchInsights(config.token,config.accountId,'campaign',dateFrom,dateTo);
-      const campParsed=campData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>({
-        name: r.campaign_name,
-        rawName: r.campaign_name,
-        day: r.date_start,
-        ...parseMetaRow(r),
-      })).map(r=>({...r,rev:r.revenue,purch:r.purchases}));
-      setCampRaw(campParsed);
+      const snap=await loadSnapshot();
 
-      const adsetData=await fetchInsights(config.token,config.accountId,'adset',dateFrom,dateTo);
-      const adsetParsed=adsetData.filter(r=>/_MT/.test(r.campaign_name)).map(r=>{
-        const parsed=parseMetaRow(r);
+      // Parse campaign insights (ALL campaigns for ineff; _MT filter happens downstream)
+      const campRowsAll=snap.campIns.map(r=>{
+        const p=parseMetaRow(r);
         return{
+          id: r.campaign_id||'',
+          name: r.campaign_name||'',
+          rawName: r.campaign_name||'',
+          day: r.date_start,
+          spend:p.spend, purch:p.purchases, rev:p.revenue, atc:p.atc, lpv:p.lpv,
+        };
+      });
+      // Parse adset insights
+      const adsetRowsAll=snap.adsetIns.map(r=>{
+        const p=parseMetaRow(r);
+        return{
+          id: r.adset_id||'',
           name: r.adset_name||'Unknown',
           campaign: r.campaign_name||'',
           day: r.date_start,
-          spend:parsed.spend, purch:parsed.purchases, rev:parsed.revenue, atc:parsed.atc, lpv:parsed.lpv,
+          spend:p.spend, purch:p.purchases, rev:p.revenue, atc:p.atc, lpv:p.lpv,
         };
       });
-      setAdsetRaw(adsetParsed);
-
-      const adData=await fetchInsights(config.token,config.accountId,'ad',dateFrom,dateTo);
-      const adParsed=adData.map(r=>{
-        const parsed=parseMetaRow(r);
+      // Parse ad insights
+      const adRowsAll=snap.adIns.map(r=>{
+        const p=parseMetaRow(r);
         return{
           adId: r.ad_id||'',
           name: r.ad_name||'Unknown',
           adset: r.adset_name||'',
           campaign: r.campaign_name||'',
           day: r.date_start,
-          spend:parsed.spend, purch:parsed.purchases, rev:parsed.revenue, atc:parsed.atc, lpv:parsed.lpv,
+          spend:p.spend, purch:p.purchases, rev:p.revenue, atc:p.atc, lpv:p.lpv,
         };
       });
-      setAdLevelRaw(adParsed);
 
-      // Cache the fetch
-      const cacheKey = `${curFrom}_${curTo}_${priFrom}_${priTo}`;
-      const history = LS.get('history',{});
-      history[cacheKey] = {campaigns:campParsed,adsets:adsetParsed,ads:adParsed,fetchedAt:new Date().toISOString()};
-      LS.set('history',history);
+      // campRaw / adsetRaw = _MT scope for main tabs (Campaigns, Angles, Landers)
+      // ineffCampRaw / ineffAdsetRaw = unfiltered, for Inefficiencies + Campaign Mgmt
+      setCampRaw(campRowsAll.filter(r=>/_MT/.test(r.name)));
+      setAdsetRaw(adsetRowsAll.filter(r=>/_MT/.test(r.campaign||'')));
+      setAdLevelRaw(adRowsAll);
+      setIneffCampRaw(campRowsAll);
+      setIneffAdsetRaw(adsetRowsAll);
+      // Raw ad rows for the ineffAds p14d aggregation (memo expects date_start/ad_name shape)
+      setIneffAdLongRaw(snap.adIns);
+
+      // Active entity ID sets
+      setActiveCampIds(new Set(snap.activeIds.campaigns||[]));
+      setActiveAdsetIds(new Set(snap.activeIds.adsets||[]));
+      setActiveAdIds(new Set(snap.activeIds.ads||[]));
+
+      // Campaign Mgmt entity metadata (daily_budget, bid_strategy)
+      setCampMgmtCampsMeta(snap.campsMeta);
+      setCampMgmtAdsetsMeta(snap.adsetsMeta);
+
+      // Creative thumbnails (merge with anything already in localStorage)
+      const cr={...LS.get('creatives',{}),...(snap.creativesData||{})};
+      setCreatives(cr);
+      LS.set('creatives',cr);
+
+      // Snapshot freshness metadata (banner + warning)
+      setSnapshotMeta(snap.metadata);
       setLastFetch(new Date().toLocaleTimeString());
     }catch(e){
-      setError(e.message);
-      // Try loading from cache
-      const cacheKey = `${curFrom}_${curTo}_${priFrom}_${priTo}`;
-      const history = LS.get('history',{});
-      if(history[cacheKey]){
-        setCampRaw(history[cacheKey].campaigns);
-        setAdsetRaw(history[cacheKey].adsets);
-        if(history[cacheKey].ads)setAdLevelRaw(history[cacheKey].ads);
-        setError(e.message + ' (showing cached data)');
-      }
+      setError('Snapshot load failed: '+e.message+' — the scheduled snapshot may not have run yet, or your connection dropped. Try Refresh Now.');
     }
-    setLoading(false);
-  },[config,curFrom,curTo,priFrom,priTo,w7From,p7YestFrom]);
+    setLoading(false);setIneffMainLoading(false);setActiveAdsLoading(false);setCampMgmtLoading(false);
+  },[config]);
 
-  // Auto-fetch on config load or date change
-  useEffect(()=>{if(config)fetchData();},[config,curFrom,curTo,priFrom,priTo]);
+  // Auto-fetch on config load only. Date changes just re-aggregate existing
+  // snapshot data in memory — no new fetch needed.
+  useEffect(()=>{if(config)fetchData();},[config]);
 
   // Process adsets with overrides — _ALT filter only (adsetRaw is already _MT-scoped)
   const ads=useMemo(()=>adsetRaw.filter(r=>/_ALT/.test(r.name)).map(r=>{
@@ -871,17 +968,10 @@ function Dashboard(){
       .sort((a,b)=>b.p7.s-a.p7.s);
   },[adLevelRaw,w7From,curTo,activeAdIds]);
 
-  // Step 2: when on Inefficiencies tab or Summary tab, fetch p14 data for
-  // candidate ad IDs only
-  useEffect(()=>{
-    if((tab!=='inefficiencies'&&tab!=='summary')||!config)return;
-    const ids=ineffAdCandidates.map(c=>c.adId).filter(Boolean);
-    if(ids.length===0){setIneffAdLongRaw([]);return;}
-    setIneffAdLongLoading(true);setIneffAdLongError('');
-    fetchAdInsightsByIds(config.token,config.accountId,ids,w14From,curTo)
-      .then(rows=>{setIneffAdLongRaw(rows);setIneffAdLongLoading(false);})
-      .catch(e=>{setIneffAdLongError(e.message);setIneffAdLongLoading(false);});
-  },[tab,config,ineffAdCandidates,w14From,curTo]);
+  // Snapshot mode: ineffAdLongRaw is already populated by fetchData from
+  // the 14-day ads-insights snapshot. No secondary Meta fetch needed.
+  // (Effect kept as no-op for shape compatibility; if snapshot ever fails,
+  // we'd fall back to direct Meta fetch here.)
 
   // Combine p7 (from candidates) with p14 (from secondary fetch)
   const ineffAds=useMemo(()=>{
@@ -1468,7 +1558,9 @@ function Dashboard(){
             React.createElement('input',{type:'date',value:priTo,onChange:e=>setPriTo(e.target.value),style:{...S.input,width:130,padding:'4px 6px',fontSize:11}})
           )
         ),
-        React.createElement('button',{onClick:fetchData,disabled:loading,style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Refresh'),
+        React.createElement('button',{onClick:fetchData,disabled:loading,title:'Re-read snapshot from GitHub (fast)',style:{...S.btn(true),padding:'5px 12px',fontSize:12,opacity:loading?0.6:1}},loading?React.createElement('span',{className:'spinner',style:{width:14,height:14}}):'\u21BB Reload'),
+        React.createElement('button',{onClick:handleRefreshSnapshot,disabled:refreshingSnapshot||loading,title:'Trigger a fresh pull from Meta via GitHub Actions. Takes ~2 min.',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:(refreshingSnapshot||loading)?0.6:1,background:'#1e3a5f',color:'#bfdbfe'}},refreshingSnapshot?'Refreshing...':'\uD83D\uDD04 Refresh Now'),
+        refreshSnapshotMsg&&React.createElement('span',{style:{fontSize:10,color:refreshSnapshotMsg.startsWith('Error')?'#f87171':'#34d399'}},refreshSnapshotMsg),
         React.createElement('button',{onClick:publishToGithub,disabled:publishing,title:'Publish overrides & notes to GitHub',style:{...S.btn(false),padding:'5px 10px',fontSize:11,opacity:publishing?0.6:1}},publishing?'Publishing...':'Publish'),
         publishMsg&&React.createElement('span',{style:{fontSize:10,color:publishMsg.startsWith('Error')?'#f87171':'#34d399'}},publishMsg),
         (()=>{
@@ -1486,6 +1578,29 @@ function Dashboard(){
     ),
 
     error&&React.createElement('div',{style:{color:'#fbbf24',fontSize:12,marginBottom:10,padding:'8px 12px',background:'#26230a',borderRadius:6}},error),
+
+    // Snapshot freshness banner — always show so user knows how old the data is
+    snapshotMeta&&(()=>{
+      const fetchedAt=new Date(snapshotMeta.fetched_at);
+      const ageMs=Date.now()-fetchedAt.getTime();
+      const ageHrs=ageMs/3600000;
+      const ageMin=Math.round(ageMs/60000);
+      const ageText=ageMin<60?`${ageMin} min ago`:`${ageHrs.toFixed(1)} hrs ago`;
+      const color=ageHrs<4.5?'#34d399':ageHrs<8?'#fbbf24':'#f87171';
+      const bg=ageHrs<4.5?'#06261a':ageHrs<8?'#26230a':'#260a0a';
+      const localTime=fetchedAt.toLocaleString('en-US',{hour:'2-digit',minute:'2-digit',month:'short',day:'numeric',timeZone:'Asia/Kuala_Lumpur'})+' MYT';
+      return React.createElement('div',{style:{fontSize:11,marginBottom:10,padding:'6px 12px',background:bg,border:`1px solid ${color}40`,borderRadius:6,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}},
+        React.createElement('span',null,
+          React.createElement('span',{style:{color}},'● '),
+          React.createElement('span',{style:{color:'#94a3b8'}},'Snapshot last refreshed: '),
+          React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},ageText),
+          React.createElement('span',{style:{color:'#64748b',marginLeft:6}},`(${localTime})`)
+        ),
+        React.createElement('span',{style:{color:'#586880',fontSize:10}},
+          `${snapshotMeta.counts?.campaign_rows||0} camp · ${snapshotMeta.counts?.adset_rows||0} adset · ${snapshotMeta.counts?.ad_rows||0} ad rows`
+        )
+      );
+    })(),
 
     // Tabs
     React.createElement('div',{style:{display:'flex',gap:2,marginBottom:12,borderBottom:'1px solid #1e293b',overflowX:'auto'}},
