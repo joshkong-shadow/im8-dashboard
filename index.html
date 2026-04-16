@@ -548,6 +548,8 @@ function Dashboard(){
         setOv(defOv);LS.set('overrides',defOv);
         if(Object.keys(defNotes).length>0){setNotes(defNotes);LS.set('notes',defNotes);}
         if(Object.keys(defBuckets).length>0){setBuckets(defBuckets);LS.set('buckets',defBuckets);}
+        const defSnapViews=defaults.snapshotViews||[];
+        if(defSnapViews.length>0){setSnapshotViews(defSnapViews);LS.set('snapshotViews',defSnapViews);}
       }
       setDefaultsLoaded(true);
     });
@@ -575,7 +577,7 @@ function Dashboard(){
     }
     setPublishing(true);setPublishMsg('');
     try{
-      const content=JSON.stringify({overrides:ov,notes,buckets},null,2);
+      const content=JSON.stringify({overrides:ov,notes,buckets,snapshotViews},null,2);
       const encoded=btoa(unescape(encodeURIComponent(content)));
       // Get current file SHA (needed for update)
       const getResp=await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/contents/default-overrides.json',{
@@ -600,7 +602,7 @@ function Dashboard(){
       setTimeout(()=>setPublishMsg(''),3000);
     }catch(e){setPublishMsg('Error: '+e.message);}
     setPublishing(false);
-  },[ov,notes,buckets]);
+  },[ov,notes,buckets,snapshotViews]);
 
   // Publish both reports (Daily Action Items + Campaign Mgmt) as plaintext
   // files in reports/. Overwrites each on every press; git history = audit trail.
@@ -656,6 +658,15 @@ function Dashboard(){
   const[adTagging,setAdTagging]=useState(null); // ad name being tagged
   const[snapFilter,setSnapFilter]=useState('');
   const[snapApplied,setSnapApplied]=useState('');
+  // Enhanced Snapshot tab state
+  const[snapCampFilter,setSnapCampFilter]=useState('');
+  const[snapAdsetFilter,setSnapAdsetFilter]=useState('');
+  const[snapAdFilter,setSnapAdFilter]=useState('');
+  const[snapAppliedCamp,setSnapAppliedCamp]=useState('');
+  const[snapAppliedAdset,setSnapAppliedAdset]=useState('');
+  const[snapAppliedAd,setSnapAppliedAd]=useState('');
+  const[snapshotViews,setSnapshotViews]=useState(()=>LS.get('snapshotViews',[]));
+  const[editingSnapBucket,setEditingSnapBucket]=useState(null);
   const[goldMineLimit,setGoldMineLimit]=useState(25);
   const[volumeLimit,setVolumeLimit]=useState(25);
   const[campDrill,setCampDrill]=useState(null);
@@ -929,6 +940,53 @@ function Dashboard(){
     });
   },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
 
+  // ═══ SNAPSHOT TAB MEMOS ═══════════════════════════════════════════════════
+  // snapAds: all ads enriched with campaign/adset name + sequence/experiment from ov
+  const snapAds=useMemo(()=>{
+    const g={};
+    for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    return Object.entries(g).map(([n,rows])=>{
+      const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      const adId=rows[0]?.adId||'';
+      const campaign=rows[0]?.campaign||'';
+      const adset=rows[0]?.adset||'';
+      const o=ov[n]||{};
+      return{n,adId,campaign,adset,...agg,sequence:o.sequence!=null?o.sequence:9999,experiment:o.experiment||''};
+    });
+  },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
+
+  // snapFiltered: snapAds filtered by applied filters, sorted by sequence asc then spend desc
+  const snapFiltered=useMemo(()=>{
+    let out=snapAds;
+    if(snapAppliedCamp)out=out.filter(a=>a.campaign.includes(snapAppliedCamp));
+    if(snapAppliedAdset)out=out.filter(a=>a.adset.includes(snapAppliedAdset));
+    if(snapAppliedAd)out=out.filter(a=>a.n.includes(snapAppliedAd));
+    return out.sort((a,b)=>{
+      const sa=a.sequence!=null?a.sequence:9999;
+      const sb=b.sequence!=null?b.sequence:9999;
+      if(sa!==sb)return sa-sb;
+      return(b.d2?.s||0)-(a.d2?.s||0);
+    });
+  },[snapAds,snapAppliedCamp,snapAppliedAdset,snapAppliedAd]);
+
+  // snapBuckets: experiment bucket summary aggregated from adLevelRaw for filtered ads
+  const snapBuckets=useMemo(()=>{
+    const filteredNames=new Set(snapFiltered.map(a=>a.n));
+    const filteredRows=adLevelRaw.filter(r=>filteredNames.has(r.name));
+    // Group by experiment tag
+    const g={};
+    for(const r of filteredRows){
+      const exp=(ov[r.name]||{}).experiment||'Unassigned';
+      if(!g[exp])g[exp]=[];
+      g[exp].push(r);
+    }
+    return Object.entries(g).map(([n,rows])=>{
+      const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      const adCount=new Set(rows.map(r=>r.name)).size;
+      return{n,adCount,...agg};
+    }).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+  },[snapFiltered,adLevelRaw,ov,curFrom,curTo,priFrom,priTo,w7From,w7To]);
+
   // ═══ INEFFICIENCIES TAB DATA ════════════════════════════════════════════
   // Aggregate raw rows into 2 trailing windows (p7/p14) ending on curTo
   const aggregateIneff=useCallback((rows)=>{
@@ -1191,10 +1249,7 @@ function Dashboard(){
       return;
     }
     if(tab==='snapshot'){
-      if(!snapApplied)return;
-      const fl=snapApplied.toLowerCase();
-      const snapAds=adD.filter(a=>a.n.toLowerCase().includes(fl));
-      const needIds=snapAds.map(a=>a.adId).filter(id=>id&&!creatives[id]);
+      const needIds=snapFiltered.map(a=>a.adId).filter(id=>id&&!creatives[id]);
       if(needIds.length>0)fetchAdCreatives(config.token,[...new Set(needIds)]).then(cr=>setCreatives(cr)).catch(()=>{});
       return;
     }
@@ -1203,7 +1258,7 @@ function Dashboard(){
     if(needIds.length>0){
       fetchAdCreatives(config.token,[...new Set(needIds)]).then(cr=>setCreatives(cr)).catch(()=>{});
     }
-  },[tab,goldMineAds,volumeAds,goldMineLimit,volumeLimit,adD,snapApplied]);
+  },[tab,goldMineAds,volumeAds,goldMineLimit,volumeLimit,adD,snapFiltered]);
 
   // On-click preview: fetch single ad creative and open preview
   const handlePreview=useCallback(async(adId)=>{
@@ -2537,149 +2592,165 @@ function Dashboard(){
     ),
 
     // ═══ ADS SNAPSHOT TAB ═══════════════════════════════════════════════════════
-    tab==='snapshot'&&React.createElement('div',null,
-      // Loading state
-      loading&&adLevelRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
-        React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
-        'Fetching ad-level data from Meta...'
+    tab==='snapshot'&&React.createElement('div',{style:{display:'flex',gap:0}},
+      // ── Left sidebar: Saved Views ──
+      React.createElement('div',{style:{width:180,flexShrink:0,borderRight:'1px solid #1e293b',paddingRight:12,marginRight:12}},
+        React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:10}},'Saved Views'),
+        React.createElement('button',{onClick:()=>{
+          const name=prompt('View name:');
+          if(!name||!name.trim())return;
+          const nx=[...snapshotViews,{name:name.trim(),filters:{campaign:snapCampFilter,adset:snapAdsetFilter,ad:snapAdFilter}}];
+          setSnapshotViews(nx);LS.set('snapshotViews',nx);
+        },style:{...S.btn(true),width:'100%',padding:'6px 8px',fontSize:11,marginBottom:10}},'+ Save View'),
+        snapshotViews.map((v,vi)=>React.createElement('div',{key:vi,style:{display:'flex',alignItems:'center',gap:4,marginBottom:6}},
+          React.createElement('div',{onClick:()=>{
+            setSnapCampFilter(v.filters.campaign||'');setSnapAdsetFilter(v.filters.adset||'');setSnapAdFilter(v.filters.ad||'');
+            setSnapAppliedCamp(v.filters.campaign||'');setSnapAppliedAdset(v.filters.adset||'');setSnapAppliedAd(v.filters.ad||'');
+          },style:{flex:1,cursor:'pointer',fontSize:11,color:'#e2e8f0',padding:'4px 6px',borderRadius:4,background:'#0c1220',border:'1px solid #1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},v.name),
+          React.createElement('button',{onClick:()=>{
+            const nx=snapshotViews.filter((_,i)=>i!==vi);
+            setSnapshotViews(nx);LS.set('snapshotViews',nx);
+          },style:{background:'none',border:'none',color:'#475569',cursor:'pointer',fontSize:10,padding:'2px 4px'}},'\u2715')
+        )),
+        snapshotViews.length===0&&React.createElement('div',{style:{fontSize:10,color:'#334155',padding:'8px 0'}},'No saved views yet.')
       ),
 
-      // Filter bar + CSV download
-      (()=>{
-        const applyFilter=()=>{if(snapFilter.trim())setSnapApplied(snapFilter.trim());};
-        const hasResults=!!snapApplied;
-        const filterLower=snapApplied.toLowerCase();
-        const allSnap=hasResults?adD.filter(a=>a.n.toLowerCase().includes(filterLower)):[];
-        const vidAds=allSnap.filter(a=>/_VID_/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
-        const imgAds=allSnap.filter(a=>/_IMG_/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
-        const otherAds=allSnap.filter(a=>!/_VID_|_IMG_/i.test(a.n)).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+      // ── Right: main content ──
+      React.createElement('div',{style:{flex:1,minWidth:0}},
+        // Loading state
+        loading&&adLevelRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+          React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
+          'Fetching ad-level data from Meta...'
+        ),
 
-        const exportSnapshotCSV=async()=>{
-          const allAds=[...vidAds,...imgAds,...otherAds];
-          const ids=allAds.map(a=>a.adId).filter(Boolean);
-          let cr={...creatives};
-          const missing=ids.filter(id=>!cr[id]);
-          if(missing.length>0&&config){
-            try{cr=await fetchAdCreatives(config.token,[...new Set(missing)]);setCreatives(cr);}catch(e){}
-          }
-          const esc=v=>{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;};
-          const hdr=['Ad Name','Spend (Current)','Spend (Prior)','Spend (14d)','Purchases (Current)','Purchases (Prior)','Purchases (14d)','ROAS (Current)','ROAS (Prior)','ROAS (14d)','Preview Link'];
-          const rows=allAds.map(r=>{
-            const link=cr[r.adId]?.preview||'';
-            return[r.n,r.d2?.s!=null?r.d2.s.toFixed(2):'',r.d1?.s!=null?r.d1.s.toFixed(2):'',r.w7?.s!=null?r.w7.s.toFixed(2):'',r.d2?.p!=null?Math.round(r.d2.p):'',r.d1?.p!=null?Math.round(r.d1.p):'',r.w7?.p!=null?Math.round(r.w7.p):'',r.d2?.roas!=null?r.d2.roas.toFixed(2):'',r.d1?.roas!=null?r.d1.roas.toFixed(2):'',r.w7?.roas!=null?r.w7.roas.toFixed(2):'',link].map(esc);
-          });
-          const csv=[hdr.join(','),...rows.map(r=>r.join(','))].join('\n');
-          const blob=new Blob([csv],{type:'text/csv'});
-          const url=URL.createObjectURL(blob);
-          const a=document.createElement('a');a.href=url;a.download='ads-snapshot-'+curFrom+'.csv';a.click();
-          URL.revokeObjectURL(url);
-        };
+        // Filter bar: Campaign / Adset / Ad
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}},
+          React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:600}},'Campaign:'),
+          React.createElement('input',{value:snapCampFilter,onChange:e=>setSnapCampFilter(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){setSnapAppliedCamp(snapCampFilter);setSnapAppliedAdset(snapAdsetFilter);setSnapAppliedAd(snapAdFilter);}},placeholder:'contains...',style:{...S.input,width:160,padding:'5px 8px',fontSize:11}}),
+          React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:600}},'Adset:'),
+          React.createElement('input',{value:snapAdsetFilter,onChange:e=>setSnapAdsetFilter(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){setSnapAppliedCamp(snapCampFilter);setSnapAppliedAdset(snapAdsetFilter);setSnapAppliedAd(snapAdFilter);}},placeholder:'contains...',style:{...S.input,width:160,padding:'5px 8px',fontSize:11}}),
+          React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:600}},'Ad:'),
+          React.createElement('input',{value:snapAdFilter,onChange:e=>setSnapAdFilter(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){setSnapAppliedCamp(snapCampFilter);setSnapAppliedAdset(snapAdsetFilter);setSnapAppliedAd(snapAdFilter);}},placeholder:'contains...',style:{...S.input,width:160,padding:'5px 8px',fontSize:11}}),
+          React.createElement('button',{onClick:()=>{setSnapAppliedCamp(snapCampFilter);setSnapAppliedAdset(snapAdsetFilter);setSnapAppliedAd(snapAdFilter);},style:{...S.btn(true),padding:'5px 12px',fontSize:11}},'\u2713 Apply'),
+          (snapAppliedCamp||snapAppliedAdset||snapAppliedAd)&&React.createElement('button',{onClick:()=>{setSnapCampFilter('');setSnapAdsetFilter('');setSnapAdFilter('');setSnapAppliedCamp('');setSnapAppliedAdset('');setSnapAppliedAd('');},style:{...S.btn(false),padding:'5px 10px',fontSize:11}},'\u2715 Clear')
+        ),
 
-        const renderCard=(ad)=>{
-          const cr=creatives[ad.adId]||{};
-          const fmtS=v=>v!=null?'$'+Math.round(v).toLocaleString():'\u2014';
-          const fmtP=v=>v!=null?Math.round(v).toLocaleString():'\u2014';
-          const fmtR=v=>v!=null?v.toFixed(2)+'x':'\u2014';
-          const roasColor=v=>v==null?'#94a3b8':v>=0.95?'#34d399':v>=0.7?'#fbbf24':'#f87171';
-          return React.createElement('div',{key:ad.n,style:{background:'#0c1220',borderRadius:8,border:'1px solid #1e293b',overflow:'hidden',width:220,flexShrink:0}},
-            // Thumbnail
-            React.createElement('div',{style:{width:'100%',height:160,background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}},
-              (cr.hiRes||cr.thumb)
-                ? React.createElement('img',{src:cr.hiRes||cr.thumb,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})
-                : React.createElement('div',{style:{color:'#334155',fontSize:32}},'\uD83D\uDDBC')
-            ),
-            // Info
-            React.createElement('div',{style:{padding:'10px 12px'}},
-              // Ad Name
-              React.createElement('div',{style:{fontSize:11,fontWeight:600,color:'#e2e8f0',lineHeight:1.3,marginBottom:8,wordBreak:'break-word',minHeight:28}},ad.n),
-              // Spend
-              React.createElement('div',{style:{fontSize:11,color:'#94a3b8',marginBottom:3,...S.mono}},
-                'Spend: ',React.createElement('span',{style:{color:'#e2e8f0'}},fmtS(ad.d2?.s)),
-                ' (',fmtS(ad.d1?.s),') ',
-                React.createElement('span',{style:{color:'#586880'}},'['+fmtS(ad.w7?.s)+']')
-              ),
-              // Purchases
-              React.createElement('div',{style:{fontSize:11,color:'#94a3b8',marginBottom:3,...S.mono}},
-                'Purch: ',React.createElement('span',{style:{color:'#e2e8f0'}},fmtP(ad.d2?.p)),
-                ' (',fmtP(ad.d1?.p),') ',
-                React.createElement('span',{style:{color:'#586880'}},'['+fmtP(ad.w7?.p)+']')
-              ),
-              // ROAS
-              React.createElement('div',{style:{fontSize:11,color:'#94a3b8',marginBottom:8,...S.mono}},
-                'RoAS: ',React.createElement('span',{style:{color:roasColor(ad.d2?.roas),fontWeight:600}},fmtR(ad.d2?.roas)),
-                ' (',fmtR(ad.d1?.roas),') ',
-                React.createElement('span',{style:{color:'#586880'}},'['+fmtR(ad.w7?.roas)+']')
-              ),
-              // Preview link
-              cr.preview
-                ? React.createElement('a',{href:cr.preview,target:'_blank',rel:'noopener',style:{fontSize:10,color:'#3b82f6',textDecoration:'none',fontWeight:600}},'Preview \u2197')
-                : React.createElement('span',{style:{fontSize:10,color:'#334155'}},'No preview')
-            )
-          );
-        };
+        // Legend
+        React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:12}},
+          'Format: Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
+          ') (Prior: ',React.createElement('b',{style:{color:'#475569'}},d1Label),') ',
+          '[7d: ',React.createElement('b',{style:{color:'#586880'}},w7Label),']',
+          ' | ',React.createElement('span',{style:{color:'#94a3b8'}},snapFiltered.length+' ads shown')
+        ),
 
-        return React.createElement(React.Fragment,null,
-          // Filter + Download row
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:12}},
-            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
-              React.createElement('span',{style:{fontSize:12,color:'#94a3b8',fontWeight:600}},'Ad Filter:'),
-              React.createElement('input',{value:snapFilter,onChange:e=>setSnapFilter(e.target.value),onKeyDown:e=>{if(e.key==='Enter')applyFilter();},placeholder:'Enter tag to filter ads...',style:{...S.input,width:280,padding:'6px 10px',fontSize:12}}),
-              React.createElement('button',{onClick:applyFilter,disabled:!snapFilter.trim(),style:{...S.btn(!!snapFilter.trim()),padding:'6px 14px',fontSize:12,opacity:snapFilter.trim()?1:0.4}},'\u2713 Apply'),
-              snapApplied&&React.createElement('button',{onClick:()=>{setSnapFilter('');setSnapApplied('');},style:{...S.btn(false),padding:'6px 10px',fontSize:11}},'\u2715 Clear')
-            ),
-            React.createElement('button',{onClick:exportSnapshotCSV,style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'6px 14px',color:'#e2e8f0',fontSize:11,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}},'\u2B07 Download CSV')
-          ),
-
-          // Blank state
-          !hasResults&&React.createElement('div',{style:{textAlign:'center',padding:'60px 20px',color:'#475569'}},
-            React.createElement('div',{style:{fontSize:32,marginBottom:12}},'\uD83D\uDD0D'),
-            React.createElement('div',{style:{fontSize:14,fontWeight:600,color:'#64748b',marginBottom:4}},'Enter a tag to load ads'),
-            React.createElement('div',{style:{fontSize:12}},'Type a keyword in the filter above and click Apply to load matching ads.')
-          ),
-
-          // Legend
-          hasResults&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:16}},
-            'Format: Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
-            ') (Prior: ',React.createElement('b',{style:{color:'#475569'}},d1Label),') ',
-            '[Past 14d: ',React.createElement('b',{style:{color:'#586880'}},w7Label),']',
-            ' | ',React.createElement('span',{style:{color:'#94a3b8'}},allSnap.length+' ads total ('+vidAds.length+' video, '+imgAds.length+' image'+(otherAds.length?', '+otherAds.length+' other':'')+')')
-          ),
-
-          // Videos section
-          hasResults&&React.createElement('div',{style:{marginBottom:24}},
-            React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#a78bfa',marginBottom:12}},'\uD83C\uDFAC Videos',
-              React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:500,marginLeft:8}},'(Have VID in Ad naming convention) \u2014 '+vidAds.length+' ads')
-            ),
-            vidAds.length===0
-              ? React.createElement('div',{style:{color:'#475569',fontSize:12,padding:16}},'No video ads match the current filter.')
-              : React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:12}},
-                  vidAds.map(renderCard)
+        // ── Experiment Bucket Summary ──
+        snapBuckets.length>0&&React.createElement('div',{style:{marginBottom:16}},
+          React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#94a3b8',marginBottom:8,textTransform:'uppercase',letterSpacing:'0.5px'}},'Experiment Summary'),
+          React.createElement('div',{style:{overflowX:'auto'}},
+            React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+              React.createElement('thead',null,React.createElement('tr',null,
+                React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+                React.createElement('th',{style:{...S.th,minWidth:140}},'Experiment'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'Ads'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+                React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
+              )),
+              React.createElement('tbody',null,snapBuckets.map((b,i)=>
+                React.createElement('tr',{key:b.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                  React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
+                  React.createElement('td',{style:{...S.td,fontWeight:700,color:'#e2e8f0'}},b.n),
+                  React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',fontSize:12}},b.adCount),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.s,prev:b.d1?.s,w7:b.w7?.s,format:'$'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.p,prev:b.d1?.p,w7:b.w7?.p,format:'n'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:b.d2?.roas,prev:b.d1?.roas,w7:b.w7?.roas,format:'x',isRoas:true})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cpa,prev:b.d1?.cpa,w7:b.w7?.cpa,format:'$',invert:true})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.atc,prev:b.d1?.atc,w7:b.w7?.atc,format:'%'})),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.cvr,prev:b.d1?.cvr,w7:b.w7?.cvr,format:'cvr'}))
                 )
-          ),
-
-          // Statics section
-          hasResults&&React.createElement('div',{style:{marginBottom:24}},
-            React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#38bdf8',marginBottom:12}},'\uD83D\uDDBC Statics',
-              React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:500,marginLeft:8}},'(Have IMG in Ad naming convention) \u2014 '+imgAds.length+' ads')
-            ),
-            imgAds.length===0
-              ? React.createElement('div',{style:{color:'#475569',fontSize:12,padding:16}},'No image ads match the current filter.')
-              : React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:12}},
-                  imgAds.map(renderCard)
-                )
-          ),
-
-          // Other section (no VID/IMG tag)
-          hasResults&&otherAds.length>0&&React.createElement('div',{style:{marginBottom:24}},
-            React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#94a3b8',marginBottom:12}},'\uD83D\uDCC1 Other',
-              React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:500,marginLeft:8}},'(No VID/IMG tag) \u2014 '+otherAds.length+' ads')
-            ),
-            React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:12}},
-              otherAds.map(renderCard)
+              ))
             )
           )
-        );
-      })()
+        ),
+
+        // ── Main Ads Table ──
+        snapFiltered.length>0?React.createElement('div',{style:{overflowX:'auto'}},
+          React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+            React.createElement('thead',null,React.createElement('tr',null,
+              React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
+              React.createElement('th',{style:{...S.th,minWidth:200}},'Ad Name'),
+              React.createElement('th',{style:{...S.th,width:60,textAlign:'center'}},'Seq'),
+              React.createElement('th',{style:{...S.th,minWidth:100}},'Experiment'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
+            )),
+            React.createElement('tbody',null,snapFiltered.map((r,i)=>
+              React.createElement('tr',{key:r.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
+                React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
+                React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:280}},
+                  React.createElement('div',{style:{wordBreak:'break-word'}},r.n),
+                  React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.campaign,' / ',r.adset)
+                ),
+                // Sequence input
+                React.createElement('td',{style:{...S.td,textAlign:'center'}},
+                  React.createElement('input',{type:'number',value:r.sequence===9999?'':r.sequence,onChange:e=>{
+                    const v=e.target.value===''?undefined:parseInt(e.target.value,10);
+                    const nx={...ov};if(!nx[r.n])nx[r.n]={};
+                    if(v==null||isNaN(v)){delete nx[r.n].sequence;}else{nx[r.n].sequence=v;}
+                    save(nx);
+                  },style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'3px 4px',color:'#e2e8f0',fontSize:11,width:44,textAlign:'center',outline:'none',...S.mono},placeholder:'-'})
+                ),
+                // Experiment dropdown
+                React.createElement('td',{style:{...S.td,minWidth:100}},(()=>{
+                  const allExpNames=[...new Set(Object.values(ov).map(o=>o.experiment).filter(Boolean))].sort();
+                  const curExp=(ov[r.n]||{}).experiment||'';
+                  const saveExp=(name,val)=>{
+                    const nx={...ov};if(!nx[name])nx[name]={};
+                    if(val.trim())nx[name].experiment=val.trim();else delete nx[name].experiment;
+                    save(nx);setEditingSnapBucket(null);
+                  };
+                  return editingSnapBucket===r.n
+                    ? React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:4}},
+                        React.createElement('select',{value:curExp,onChange:e=>{if(e.target.value==='__NEW__'){setEditingSnapBucket(r.n+'__new');}else{saveExp(r.n,e.target.value);}},style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontSize:11,outline:'none'}},
+                          React.createElement('option',{value:''},'Unassigned'),
+                          allExpNames.map(b=>React.createElement('option',{key:b,value:b},b)),
+                          React.createElement('option',{value:'__NEW__'},'+ New experiment...')
+                        )
+                      )
+                    : editingSnapBucket===r.n+'__new'
+                    ? React.createElement('input',{
+                        autoFocus:true,
+                        placeholder:'Experiment name...',
+                        onBlur:e=>saveExp(r.n,e.target.value),
+                        onKeyDown:e=>{if(e.key==='Enter')saveExp(r.n,e.target.value);if(e.key==='Escape')setEditingSnapBucket(null);},
+                        style:{background:'#1e293b',border:'1px solid #3b82f6',borderRadius:4,padding:'4px 6px',color:'#e2e8f0',fontSize:11,width:'100%',outline:'none'}
+                      })
+                    : React.createElement('div',{
+                        onClick:()=>setEditingSnapBucket(r.n),
+                        style:{cursor:'pointer',fontSize:11,fontWeight:600,color:curExp?'#3b82f6':'#334155',padding:'2px 0'}
+                      },curExp||'Unassigned');
+                })()),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.s,prev:r.d1?.s,w7:r.w7?.s,format:'$'})),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.p,prev:r.d1?.p,w7:r.w7?.p,format:'n'})),
+                React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:r.d2?.roas,prev:r.d1?.roas,w7:r.w7?.roas,format:'x',isRoas:true})),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cpa,prev:r.d1?.cpa,w7:r.w7?.cpa,format:'$',invert:true})),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.atc,prev:r.d1?.atc,w7:r.w7?.atc,format:'%'})),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2?.cvr,prev:r.d1?.cvr,w7:r.w7?.cvr,format:'cvr'}))
+              )
+            ))
+          )
+        ):(!loading&&adLevelRaw.length>0&&React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'#475569'}},
+          React.createElement('div',{style:{fontSize:14,fontWeight:600,color:'#64748b',marginBottom:4}},'No ads match the current filters'),
+          React.createElement('div',{style:{fontSize:12}},'Try adjusting or clearing the filters above.')
+        ))
+      )
     ),
 
     // ═══ INEFFICIENCIES TAB ═════════════════════════════════════════════════════
