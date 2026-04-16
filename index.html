@@ -346,6 +346,58 @@ function labelCampaign(c){
 }
 
 // ═══ AGGREGATE ══════════════════════════════════════════════════════════════
+// ═══ AD NAME PARSER (Creative Insights) ════════════════════════════════════
+function parseAdName(name){
+  const def={launchDate:'Unknown',format:'Unknown',adType:'Unknown',icp:'Unknown',concept:'Unknown',creativeNumber:'Unknown',agency:'Unknown',batchName:'Unknown',creatorType:'Unknown',creatorName:'Unknown',hook:'Unknown',wtad:'Unknown',ldp:'Unknown'};
+  if(!name||typeof name!=='string')return def;
+  const trimmed=name.trim();
+  if(!trimmed)return def;
+  const isNew=trimmed.includes('*');
+  if(isNew){
+    const parts=trimmed.split('_');
+    if(parts.length<13)return{...def,format:parts[1]||'Unknown',creativeNumber:parts[5]||'Unknown'};
+    let ldpRaw=parts[12]||'';
+    // Strip * and everything after, then strip suffixes like " -WIN26AW2"
+    ldpRaw=ldpRaw.split('*')[0].replace(/\s+-\S+$/,'').trim()||'Unknown';
+    return{
+      launchDate:parts[0]||'Unknown',
+      format:parts[1]||'Unknown',
+      adType:parts[2]||'Unknown',
+      icp:parts[3]||'Unknown',
+      concept:parts[4]||'Unknown',
+      creativeNumber:parts[5]||'Unknown',
+      agency:parts[6]||'Unknown',
+      batchName:parts[7]||'Unknown',
+      creatorType:parts[8]||'Unknown',
+      creatorName:parts[9]||'Unknown',
+      hook:parts[10]||'Unknown',
+      wtad:parts[11]||'Unknown',
+      ldp:ldpRaw,
+    };
+  }else{
+    const parts=trimmed.split('_');
+    if(parts.length<10)return{...def,format:parts[0]||'Unknown',creativeNumber:parts[1]||'Unknown'};
+    const paidSeedRaw=(parts[4]||'').toUpperCase();
+    const creatorType=paidSeedRaw==='PAID'?'Paid':paidSeedRaw==='SEED'?'Seeded':paidSeedRaw==='NA'?'NA':'Unknown';
+    let ldpRaw=(parts[9]||'').replace(/\s+-\S+$/,'').trim()||'Unknown';
+    return{
+      launchDate:parts[7]||'Unknown',
+      format:parts[0]||'Unknown',
+      adType:'Unknown',
+      icp:'Unknown',
+      concept:parts[5]||'Unknown',
+      creativeNumber:parts[1]||'Unknown',
+      agency:'Unknown',
+      batchName:parts[2]||'Unknown',
+      creatorType:creatorType,
+      creatorName:parts[3]||'Unknown',
+      hook:parts[6]||'Unknown',
+      wtad:parts[8]||'Unknown',
+      ldp:ldpRaw,
+    };
+  }
+}
+
 function aggregate(rows, curFrom, curTo, priFrom, priTo, w7From, w7To){
   const bd={};
   for(const r of rows){
@@ -710,6 +762,11 @@ function Dashboard(){
   const[activeCampIds,setActiveCampIds]=useState(null);
   const[activeAdsLoading,setActiveAdsLoading]=useState(false);
   const[activeAdsError,setActiveAdsError]=useState('');
+  // Creative Insights tab state
+  const[ciDimRow,setCiDimRow]=useState('format');
+  const[ciDimCol,setCiDimCol]=useState('icp');
+  const[ciMetric,setCiMetric]=useState('roas');
+  const[ciFatigueOnly,setCiFatigueOnly]=useState(false);
 
   const[bn,setBn]=useState('');
   const[fms,setFms]=useState(0);
@@ -973,6 +1030,92 @@ function Dashboard(){
       return{n,adId,campaign:rows[0]?.campaign||'',adset:rows[0]?.adset||'',...agg,persona:o.persona||'Untagged',format:o.format||'Untagged'};
     });
   },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
+
+  // ═══ CREATIVE INSIGHTS MEMOS ═════════════════════════════════════════════
+  const ciDimFields=['format','adType','icp','concept','agency','creatorType','creatorName','ldp'];
+  const ciAllFields=['format','adType','icp','concept','creativeNumber','agency','batchName','creatorType','creatorName','hook','wtad','ldp','launchDate'];
+  const ciParsedAds=useMemo(()=>{
+    const g={};
+    for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    return Object.entries(g).map(([n,rows])=>{
+      const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      const parsed=parseAdName(n);
+      const o=ov[n]||{};
+      const dims={};
+      for(const field of ciAllFields){dims[field]=o['ci_'+field]||parsed[field]||'Unknown';}
+      return{n,adId:rows[0]?.adId||'',rows,...dims,...agg};
+    });
+  },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
+
+  const ciDimensionTables=useMemo(()=>{
+    const result={};
+    for(const dim of ciDimFields){
+      const groups={};
+      for(const ad of ciParsedAds){const v=ad[dim]||'Unknown';if(!groups[v])groups[v]=[];groups[v].push(ad);}
+      result[dim]=Object.entries(groups).map(([val,ads])=>{
+        const allRows=[];for(const ad of ads)allRows.push(...ad.rows);
+        const agg=aggregate(allRows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+        return{dimValue:val,adCount:ads.length,...agg};
+      }).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+    }
+    return result;
+  },[ciParsedAds,curFrom,curTo,priFrom,priTo,w7From,w7To]);
+
+  const ciPivotData=useMemo(()=>{
+    const groups={};
+    for(const ad of ciParsedAds){
+      const rv=ad[ciDimRow]||'Unknown';
+      const cv=ad[ciDimCol]||'Unknown';
+      const key=rv+'\x00'+cv;
+      if(!groups[key])groups[key]={rowVal:rv,colVal:cv,rows:[]};
+      groups[key].rows.push(...ad.rows);
+    }
+    const cells=[];
+    for(const g of Object.values(groups)){
+      const agg=aggregate(g.rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      cells.push({rowVal:g.rowVal,colVal:g.colVal,...agg});
+    }
+    return cells;
+  },[ciParsedAds,ciDimRow,ciDimCol,curFrom,curTo,priFrom,priTo,w7From,w7To]);
+
+  const ciFatigueAds=useMemo(()=>{
+    return ciParsedAds.filter(a=>{
+      if(!a.tot||!a.w7||!a.d2)return false;
+      if((a.d2.s||0)<250)return false;
+      if(a.tot.roas<=0)return false;
+      return a.w7.roas<a.tot.roas*0.8;
+    }).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
+  },[ciParsedAds]);
+
+  const ciCohorts=useMemo(()=>{
+    const groups={};
+    for(const ad of ciParsedAds){
+      const ld=ad.launchDate;
+      if(!ld||ld==='Unknown')continue;
+      // Parse YYMMDD to a date, find Monday of that week
+      let dt;
+      if(ld.length===6){
+        const y=2000+parseInt(ld.slice(0,2));const m=parseInt(ld.slice(2,4))-1;const d=parseInt(ld.slice(4,6));
+        dt=new Date(y,m,d);
+      }else if(ld.length===8){
+        const y=parseInt(ld.slice(0,4));const m=parseInt(ld.slice(4,6))-1;const d=parseInt(ld.slice(6,8));
+        dt=new Date(y,m,d);
+      }else{continue;}
+      if(isNaN(dt.getTime()))continue;
+      const day=dt.getDay();const diff=day===0?-6:1-day;
+      const mon=new Date(dt);mon.setDate(dt.getDate()+diff);
+      const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+      const key=mon.toISOString().split('T')[0];
+      const label=mon.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'-'+sun.toLocaleDateString('en-US',{day:'numeric'});
+      if(!groups[key])groups[key]={week:key,label,ads:[],allRows:[]};
+      groups[key].ads.push(ad);
+      groups[key].allRows.push(...ad.rows);
+    }
+    return Object.values(groups).map(g=>{
+      const agg=aggregate(g.allRows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      return{week:g.week,label:g.label,adCount:g.ads.length,...agg};
+    }).sort((a,b)=>b.week.localeCompare(a.week));
+  },[ciParsedAds,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
   // ═══ SNAPSHOT TAB MEMOS ═══════════════════════════════════════════════════
   // snapAds: all ads enriched with campaign/adset name + sequence/experiment from ov
@@ -1869,13 +2012,13 @@ function Dashboard(){
 
     // Tabs
     React.createElement('div',{style:{display:'flex',gap:2,marginBottom:12,borderBottom:'1px solid #1e293b',overflowX:'auto'}},
-      [{id:'summary',l:'Summary'},{id:'campaigns',l:'Campaigns'},{id:'angles',l:'Ad Angles / Personas'},{id:'landers',l:'Landing Pages'},{id:'ads',l:'Ads'},{id:'snapshot',l:'Ads Snapshot'},{id:'inefficiencies',l:'Inefficiencies'},{id:'campmgmt',l:'Campaign Mgmt'}].map(t=>
+      [{id:'summary',l:'Summary'},{id:'campaigns',l:'Campaigns'},{id:'angles',l:'Ad Angles / Personas'},{id:'landers',l:'Landing Pages'},{id:'ads',l:'Ads'},{id:'snapshot',l:'Ads Snapshot'},{id:'inefficiencies',l:'Inefficiencies'},{id:'campmgmt',l:'Campaign Mgmt'},{id:'creative',l:'Creative Insights'}].map(t=>
         React.createElement('button',{key:t.id,onClick:()=>{setTab(t.id);setEp(null);},style:{padding:'10px 14px',border:'none',cursor:'pointer',background:'transparent',whiteSpace:'nowrap',borderBottom:tab===t.id?'2px solid #3b82f6':'2px solid transparent',color:tab===t.id?'#e2e8f0':'#64748b',fontSize:13,fontWeight:600}},t.l)
       )
     ),
 
     // Filters (not on ads/summary tab)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&tab!=='creative'&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
       React.createElement('span',{style:{fontSize:11,color:'#64748b'}},'Min Spend'),
       [0,100,500,1000,5000].map(v=>React.createElement('button',{key:v,onClick:()=>setFms(v),style:S.btn(fms===v)},v===0?'All':'$'+v.toLocaleString()+'+')),
       React.createElement('div',{style:{width:1,height:18,background:'#1e293b'}}),
@@ -1885,7 +2028,7 @@ function Dashboard(){
     ),
 
     // Legend (not on ads/summary tab)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&tab!=='creative'&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginBottom:8}},
       'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
       ') | Below = Prior (',React.createElement('b',{style:{color:'#475569'}},d1Label),')',
       ' | [Brackets] = 7d (',React.createElement('b',{style:{color:'#586880'}},w7Label),')',
@@ -1895,7 +2038,7 @@ function Dashboard(){
     ),
 
     // Loading state (not on ads/summary tab for this block)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&tab!=='creative'&&loading&&campRaw.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'#64748b'}},
       React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
       'Fetching data from Meta...'
     ),
@@ -1934,7 +2077,7 @@ function Dashboard(){
     ),
 
     // Table (not on ads/summary tab)
-    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&(!loading||campRaw.length>0)?React.createElement('div',{style:{overflowX:'auto'}},
+    tab!=='ads'&&tab!=='summary'&&tab!=='snapshot'&&tab!=='inefficiencies'&&tab!=='campmgmt'&&tab!=='creative'&&(!loading||campRaw.length>0)?React.createElement('div',{style:{overflowX:'auto'}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
         React.createElement('thead',null,React.createElement('tr',null,
           React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
@@ -3206,6 +3349,177 @@ function Dashboard(){
             React.createElement('div',{style:{fontSize:12,fontWeight:700,color:recColor,borderTop:'1px solid #1e293b',paddingTop:8}},'\u2192 Strategic Recommendation: '+rec)
           );
         })
+      );
+    })(),
+
+    // ── CREATIVE INSIGHTS TAB ──
+    tab==='creative'&&(()=>{
+      const ciDimOptions=[{value:'format',label:'Format'},{value:'adType',label:'Ad Type'},{value:'icp',label:'ICP / Persona'},{value:'concept',label:'Concept / Problem'},{value:'agency',label:'Agency'},{value:'creatorType',label:'Creator Type'},{value:'creatorName',label:'Creator Name'},{value:'ldp',label:'Landing Page'}];
+      const ciMetricOptions=[{value:'s',label:'Spend',format:'$'},{value:'p',label:'Purchases',format:'n'},{value:'roas',label:'ROAS',format:'x'},{value:'cpa',label:'CPA',format:'$'},{value:'atc',label:'ATC%',format:'%'},{value:'cvr',label:'CVR%',format:'cvr'}];
+      const ciMetricOpt=ciMetricOptions.find(m=>m.value===ciMetric)||ciMetricOptions[0];
+      const fmtVal=(v,fmt)=>{if(v==null)return'\u2014';if(fmt==='$')return'$'+Math.round(v).toLocaleString();if(fmt==='x')return v.toFixed(2)+'x';if(fmt==='n')return Math.round(v).toLocaleString();if(fmt==='%')return v.toFixed(1)+'%';if(fmt==='cvr')return v.toFixed(2)+'%';return String(v);};
+      const getMetricVal=(agg,metric)=>{if(!agg)return null;return agg[metric]!=null?agg[metric]:null;};
+
+      // Pivot matrix data
+      const pivotRows=[...new Set(ciPivotData.map(c=>c.rowVal))].sort();
+      const pivotCols=[...new Set(ciPivotData.map(c=>c.colVal))].sort();
+      const pivotMap={};for(const c of ciPivotData)pivotMap[c.rowVal+'\x00'+c.colVal]=c;
+
+      // Color for pivot cells
+      const allPivotVals=ciPivotData.map(c=>getMetricVal(c.d2,ciMetric)).filter(v=>v!=null&&v>0);
+      const pivotMedian=allPivotVals.length>0?(()=>{const s=[...allPivotVals].sort((a,b)=>a-b);return s[Math.floor(s.length/2)];})():1;
+      const pivotCellBg=(val)=>{
+        if(val==null)return'transparent';
+        if(ciMetric==='roas')return val>=1.0?'#06261a':val>=0.7?'#26230a':'#260a0a';
+        if(ciMetric==='cpa')return val<=pivotMedian?'#06261a':val<=pivotMedian*1.5?'#26230a':'#260a0a';
+        if(ciMetric==='s'){const max=Math.max(...allPivotVals,1);const pct=val/max;return 'rgba(59,130,246,'+Math.min(0.3,pct*0.3).toFixed(2)+')';}
+        return val>=pivotMedian?'#06261a':val>=pivotMedian*0.5?'#26230a':'#260a0a';
+      };
+      const pivotCellColor=(val)=>{
+        if(val==null)return'#64748b';
+        if(ciMetric==='roas')return val>=1.0?'#34d399':val>=0.7?'#fbbf24':'#f87171';
+        if(ciMetric==='cpa')return val<=pivotMedian?'#34d399':val<=pivotMedian*1.5?'#fbbf24':'#f87171';
+        return'#e2e8f0';
+      };
+
+      return React.createElement('div',{style:{paddingBottom:40},className:'fade-in'},
+
+        // ── Section 1: Dimension Breakdown Tables ──
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Dimension Breakdowns'),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(520px,1fr))',gap:16,marginBottom:32}},
+          ciDimOptions.map(dim=>{
+            const tableData=ciDimensionTables[dim.value]||[];
+            return React.createElement('div',{key:dim.value,style:{background:'#0c1220',borderRadius:8,border:'1px solid #1e293b',overflow:'hidden'}},
+              React.createElement('div',{style:{padding:'10px 14px',borderBottom:'1px solid #1e293b',fontSize:12,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.5px'}},dim.label),
+              React.createElement('div',{style:{overflowX:'auto'}},
+                React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
+                  React.createElement('thead',null,React.createElement('tr',null,
+                    React.createElement('th',{style:{...S.th,width:28,textAlign:'center'}},'#'),
+                    React.createElement('th',{style:{...S.th,minWidth:100}},'Value'),
+                    React.createElement('th',{style:{...S.th,textAlign:'center',width:40}},'Ads'),
+                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+                    React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
+                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
+                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
+                  )),
+                  React.createElement('tbody',null,
+                    tableData.map((row,i)=>React.createElement('tr',{key:row.dimValue,style:{background:i%2===0?'transparent':'#0a0f1a'}},
+                      React.createElement('td',{style:{...S.td,textAlign:'center',color:'#475569',fontSize:11}},i+1),
+                      React.createElement('td',{style:{...S.td,fontSize:12,fontWeight:600,color:'#e2e8f0',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},row.dimValue),
+                      React.createElement('td',{style:{...S.td,textAlign:'center',fontSize:11,color:'#64748b'}},row.adCount),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.s,prev:row.d1?.s,w7:row.w7?.s,format:'$'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.p,prev:row.d1?.p,w7:row.w7?.p,format:'n'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:row.d2?.roas,prev:row.d1?.roas,w7:row.w7?.roas,format:'x',isRoas:true})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.cpa,prev:row.d1?.cpa,w7:row.w7?.cpa,format:'$',invert:true})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.atc,prev:row.d1?.atc,w7:row.w7?.atc,format:'%'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.cvr,prev:row.d1?.cvr,w7:row.w7?.cvr,format:'cvr'}))
+                    ))
+                  )
+                )
+              )
+            );
+          })
+        ),
+
+        // ── Section 2: Pivot Matrix ──
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Pivot Matrix'),
+        React.createElement('div',{style:{display:'flex',gap:12,marginBottom:16,alignItems:'center',flexWrap:'wrap'}},
+          React.createElement('label',{style:{fontSize:11,color:'#64748b'}},'Rows:'),
+          React.createElement('select',{value:ciDimRow,onChange:e=>setCiDimRow(e.target.value),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'6px 10px',color:'#e2e8f0',fontSize:12,outline:'none'}},
+            ciDimOptions.map(o=>React.createElement('option',{key:o.value,value:o.value},o.label))
+          ),
+          React.createElement('label',{style:{fontSize:11,color:'#64748b'}},'Columns:'),
+          React.createElement('select',{value:ciDimCol,onChange:e=>setCiDimCol(e.target.value),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'6px 10px',color:'#e2e8f0',fontSize:12,outline:'none'}},
+            ciDimOptions.map(o=>React.createElement('option',{key:o.value,value:o.value},o.label))
+          ),
+          React.createElement('label',{style:{fontSize:11,color:'#64748b'}},'Metric:'),
+          React.createElement('select',{value:ciMetric,onChange:e=>setCiMetric(e.target.value),style:{background:'#1e293b',border:'1px solid #334155',borderRadius:4,padding:'6px 10px',color:'#e2e8f0',fontSize:12,outline:'none'}},
+            ciMetricOptions.map(o=>React.createElement('option',{key:o.value,value:o.value},o.label))
+          )
+        ),
+        pivotRows.length>0&&pivotCols.length>0?React.createElement('div',{style:{overflowX:'auto',marginBottom:32}},
+          React.createElement('table',{style:{borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+            React.createElement('thead',null,React.createElement('tr',null,
+              React.createElement('th',{style:{...S.th,minWidth:120,position:'sticky',left:0,background:'#0f172a',zIndex:1}},
+                (ciDimOptions.find(o=>o.value===ciDimRow)||{}).label+' \\ '+(ciDimOptions.find(o=>o.value===ciDimCol)||{}).label
+              ),
+              pivotCols.map(c=>React.createElement('th',{key:c,style:{...S.th,textAlign:'center',minWidth:80}},c))
+            )),
+            React.createElement('tbody',null,
+              pivotRows.map(r=>React.createElement('tr',{key:r},
+                React.createElement('td',{style:{...S.td,fontSize:12,fontWeight:600,color:'#e2e8f0',whiteSpace:'nowrap',position:'sticky',left:0,background:'#0c1220',zIndex:1}},r),
+                pivotCols.map(c=>{
+                  const cell=pivotMap[r+'\x00'+c];
+                  const val=cell?getMetricVal(cell.d2,ciMetric):null;
+                  return React.createElement('td',{key:c,style:{...S.td,textAlign:'center',background:pivotCellBg(val),minWidth:80},title:cell?'Spend: $'+(cell.d2?.s||0).toLocaleString()+' | Purch: '+(cell.d2?.p||0)+' | ROAS: '+(cell.d2?.roas||0).toFixed(2)+'x':'No data'},
+                    React.createElement('span',{style:{color:pivotCellColor(val),fontWeight:600,fontSize:13,...S.mono}},fmtVal(val,ciMetricOpt.format))
+                  );
+                })
+              ))
+            )
+          )
+        ):React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12}},'No data for pivot matrix.'),
+
+        // ── Section 3: Creative Fatigue Tracker ──
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Creative Fatigue Tracker',
+          React.createElement('span',{style:{fontSize:11,color:'#64748b',fontWeight:400,marginLeft:8}},'(p7d ROAS dropped >20% vs overall, $250+ current spend)')
+        ),
+        ciFatigueAds.length>0?React.createElement('div',{style:{overflowX:'auto',marginBottom:32}},
+          React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+            React.createElement('thead',null,React.createElement('tr',null,
+              React.createElement('th',{style:{...S.th,width:28,textAlign:'center'}},'#'),
+              React.createElement('th',{style:{...S.th,minWidth:200}},'Ad Name'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'p7d ROAS'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'Overall ROAS'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'Drop %'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend (cur)'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch (cur)')
+            )),
+            React.createElement('tbody',null,
+              ciFatigueAds.map((a,i)=>{
+                const drop=a.tot.roas>0?((a.w7.roas-a.tot.roas)/a.tot.roas*100):0;
+                return React.createElement('tr',{key:a.n,style:{background:i%2===0?'transparent':'#0a0f1a'}},
+                  React.createElement('td',{style:{...S.td,textAlign:'center',color:'#475569',fontSize:11}},i+1),
+                  React.createElement('td',{style:{...S.td,fontSize:11,color:'#e2e8f0',maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},a.n),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement('span',{style:{color:a.w7?.roas>=1.0?'#34d399':a.w7?.roas>=0.7?'#fbbf24':'#f87171',fontWeight:600,...S.mono,fontSize:13}},a.w7?a.w7.roas.toFixed(2)+'x':'\u2014')),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement('span',{style:{color:a.tot.roas>=1.0?'#34d399':a.tot.roas>=0.7?'#fbbf24':'#f87171',fontWeight:600,...S.mono,fontSize:13}},a.tot.roas.toFixed(2)+'x')),
+                  React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement('span',{style:{color:'#f87171',fontWeight:700,...S.mono,fontSize:13}},drop.toFixed(1)+'%')),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600,...S.mono,fontSize:13}},'$'+Math.round(a.d2?.s||0).toLocaleString())),
+                  React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement('span',{style:{color:'#e2e8f0',...S.mono,fontSize:13}},Math.round(a.d2?.p||0).toLocaleString()))
+                );
+              })
+            )
+          )
+        ):React.createElement('div',{style:{padding:20,color:'#34d399',fontSize:12,marginBottom:32}},'No fatigued ads detected. All creatives are performing within tolerance.'),
+
+        // ── Section 4: Launch Cohort Performance ──
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Launch Cohort Performance'),
+        ciCohorts.length>0?React.createElement('div',{style:{overflowX:'auto',marginBottom:32}},
+          React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
+            React.createElement('thead',null,React.createElement('tr',null,
+              React.createElement('th',{style:{...S.th,width:28,textAlign:'center'}},'#'),
+              React.createElement('th',{style:{...S.th,minWidth:110}},'Week'),
+              React.createElement('th',{style:{...S.th,textAlign:'center',width:40}},'Ads'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
+              React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
+              React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA')
+            )),
+            React.createElement('tbody',null,
+              ciCohorts.map((c,i)=>React.createElement('tr',{key:c.week,style:{background:i%2===0?'transparent':'#0a0f1a'}},
+                React.createElement('td',{style:{...S.td,textAlign:'center',color:'#475569',fontSize:11}},i+1),
+                React.createElement('td',{style:{...S.td,fontSize:12,fontWeight:600,color:'#e2e8f0'}},c.label),
+                React.createElement('td',{style:{...S.td,textAlign:'center',fontSize:11,color:'#64748b'}},c.adCount),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:c.d2?.s,prev:c.d1?.s,w7:c.w7?.s,format:'$'})),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:c.d2?.p,prev:c.d1?.p,w7:c.w7?.p,format:'n'})),
+                React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:c.d2?.roas,prev:c.d1?.roas,w7:c.w7?.roas,format:'x',isRoas:true})),
+                React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:c.d2?.cpa,prev:c.d1?.cpa,w7:c.w7?.cpa,format:'$',invert:true}))
+              ))
+            )
+          )
+        ):React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12,marginBottom:32}},'No cohort data available (ads need parseable launch dates).')
       );
     })(),
 
