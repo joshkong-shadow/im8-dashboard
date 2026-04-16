@@ -785,7 +785,7 @@ function Dashboard(){
     setRefreshingSnapshot(true);setRefreshSnapshotMsg('');
     try{
       await triggerSnapshotRefresh(ghToken);
-      setRefreshSnapshotMsg('Triggered! Auto-reloading in ~2 min...');
+      setRefreshSnapshotMsg('Triggered! Auto-reloading in ~12 min (your account takes ~10 min to fetch)...');
       // Wait 2.5 min then auto-reload snapshot
       setTimeout(async()=>{
         setRefreshSnapshotMsg('Reloading fresh data...');
@@ -797,7 +797,7 @@ function Dashboard(){
         }
         setTimeout(()=>setRefreshSnapshotMsg(''),4000);
         setRefreshingSnapshot(false);
-      },150000); // 150s = 2.5 min
+      },720000); // 720s = 12 min — matches actual account fetch time
     }catch(e){
       setRefreshSnapshotMsg('Error: '+e.message);
       setRefreshingSnapshot(false);
