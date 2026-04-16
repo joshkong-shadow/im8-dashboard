@@ -45,5 +45,6 @@ jobs:
           else
             TS=$(date -u +"%Y-%m-%d %H:%M UTC")
             git commit -m "Snapshot: Meta data refresh ${TS}"
+            git pull --rebase origin main
             git push
           fi
