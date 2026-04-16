@@ -775,6 +775,24 @@ function Dashboard(){
 
   // Refresh Now: trigger the snapshot workflow via GitHub Actions dispatch,
   // then auto-reload data after ~2 min.
+  // Poll GitHub Actions for workflow run status. Returns 'in_progress',
+  // 'success', or 'failed: <reason>'.
+  const pollRunStatus=useCallback(async(ghToken)=>{
+    try{
+      const resp=await fetch('https://api.github.com/repos/joshkong-shadow/im8-dashboard/actions/workflows/snapshot.yml/runs?event=workflow_dispatch&per_page=1',{
+        headers:{'Authorization':'token '+ghToken,'Accept':'application/vnd.github.v3+json'}
+      });
+      if(!resp.ok)return 'unknown';
+      const data=await resp.json();
+      const run=(data.workflow_runs||[])[0];
+      if(!run)return 'unknown';
+      if(run.status==='completed')return run.conclusion==='success'?'success':'failed: '+run.conclusion;
+      if(run.status==='in_progress'||run.status==='queued')return 'in_progress';
+      return run.status;
+    }catch(e){return 'unknown';}
+  },[]);
+
+  const refreshStartRef=useRef(null);
   const handleRefreshSnapshot=useCallback(async()=>{
     let ghToken=LS.get('gh_token','');
     if(!ghToken){
@@ -785,25 +803,41 @@ function Dashboard(){
     setRefreshingSnapshot(true);setRefreshSnapshotMsg('');
     try{
       await triggerSnapshotRefresh(ghToken);
-      setRefreshSnapshotMsg('Triggered! Auto-reloading in ~12 min (your account takes ~10 min to fetch)...');
-      // Wait 2.5 min then auto-reload snapshot
-      setTimeout(async()=>{
-        setRefreshSnapshotMsg('Reloading fresh data...');
-        try{
-          await fetchData();
-          setRefreshSnapshotMsg('Updated!');
-        }catch(e){
-          setRefreshSnapshotMsg('Reload failed: '+e.message);
+      refreshStartRef.current=Date.now();
+      setRefreshSnapshotMsg('\u23F3 Refresh triggered \u2014 polling for completion...');
+      // Poll every 30s until run completes or 15 min timeout
+      const poll=setInterval(async()=>{
+        const elapsed=Math.round((Date.now()-refreshStartRef.current)/60000);
+        const status=await pollRunStatus(ghToken);
+        if(status==='in_progress'){
+          setRefreshSnapshotMsg('\u23F3 Refresh in progress... ('+elapsed+' min elapsed)');
+        }else if(status==='success'){
+          clearInterval(poll);
+          setRefreshSnapshotMsg('\u2705 Workflow complete \u2014 reloading data...');
+          try{
+            await fetchData();
+            setRefreshSnapshotMsg('\u2705 Snapshot refreshed successfully!');
+          }catch(e){
+            setRefreshSnapshotMsg('\u26A0 Workflow succeeded but reload failed: '+e.message+' \u2014 click \u21BB Reload.');
+          }
+          setTimeout(()=>setRefreshSnapshotMsg(''),10000);
+          setRefreshingSnapshot(false);
+        }else if(status.startsWith('failed')){
+          clearInterval(poll);
+          setRefreshSnapshotMsg('\u274C Refresh '+status+' \u2014 check Actions tab for details.');
+          setRefreshingSnapshot(false);
+        }else if(elapsed>=15){
+          clearInterval(poll);
+          setRefreshSnapshotMsg('\u26A0 Timeout after 15 min \u2014 run may still be going. Click \u21BB Reload when ready.');
+          setRefreshingSnapshot(false);
         }
-        setTimeout(()=>setRefreshSnapshotMsg(''),4000);
-        setRefreshingSnapshot(false);
-      },720000); // 720s = 12 min — matches actual account fetch time
+      },30000); // poll every 30s
     }catch(e){
-      setRefreshSnapshotMsg('Error: '+e.message);
+      setRefreshSnapshotMsg('\u274C Error: '+e.message);
       setRefreshingSnapshot(false);
       if(/401|403/.test(e.message)){LS.set('gh_token','');}
     }
-  },[fetchData]);
+  },[fetchData,pollRunStatus]);
 
   // Snapshot-backed fetchData: reads pre-fetched JSONs from GitHub instead
   // of hitting Meta. Populates every state var the dashboard depends on.
@@ -1759,6 +1793,21 @@ function Dashboard(){
         )
       );
     })(),
+
+    // Refresh status bar — persistent while refreshing or on failure
+    refreshSnapshotMsg&&React.createElement('div',{style:{
+      fontSize:12,marginBottom:10,padding:'8px 14px',borderRadius:6,
+      display:'flex',justifyContent:'space-between',alignItems:'center',
+      background:refreshSnapshotMsg.startsWith('\u274C')?'#260a0a':refreshSnapshotMsg.startsWith('\u2705')?'#06261a':'#1a1a0a',
+      border:'1px solid '+(refreshSnapshotMsg.startsWith('\u274C')?'#f8717140':refreshSnapshotMsg.startsWith('\u2705')?'#34d39940':'#fbbf2440'),
+      color:refreshSnapshotMsg.startsWith('\u274C')?'#f87171':refreshSnapshotMsg.startsWith('\u2705')?'#34d399':'#fbbf24',
+    }},
+      React.createElement('span',null,
+        refreshingSnapshot&&React.createElement('span',{className:'spinner',style:{width:12,height:12,marginRight:8,verticalAlign:'middle'}}),
+        refreshSnapshotMsg
+      ),
+      !refreshingSnapshot&&refreshSnapshotMsg.startsWith('\u274C')&&React.createElement('button',{onClick:()=>setRefreshSnapshotMsg(''),style:{background:'none',border:'none',color:'#64748b',cursor:'pointer',fontSize:11}},'\u2715 Dismiss')
+    ),
 
     // Tabs
     React.createElement('div',{style:{display:'flex',gap:2,marginBottom:12,borderBottom:'1px solid #1e293b',overflowX:'auto'}},
