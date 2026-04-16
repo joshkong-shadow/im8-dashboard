@@ -1060,6 +1060,8 @@ function Dashboard(){
     const sumRange=(rows,from,to)=>{let s=0,p=0,rev=0;for(const x of rows){if(x.day>=from&&x.day<=to){s+=x.spend;p+=x.purch;rev+=x.rev;}}return{s,p,roas:s>0?rev/s:0,cpa:p>0?s/p:null};};
     const g={};
     for(const r of adLevelRaw){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    // Past 3 days window ending at curTo
+    const p3From=(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-2);return fmt(d);})();
     const out=[];
     for(const [n,rows] of Object.entries(g)){
       const adId=rows[0]?.adId||'';
@@ -1072,11 +1074,12 @@ function Dashboard(){
       if(adsetD2Spend<=0)continue;
       const ratio=d2.s/adsetD2Spend;
       if(ratio<0.75)continue;
+      const p3=sumRange(rows,p3From,curTo);
       out.push({
         n, adId,
         adset: adsetName,
         campaign: rows[0]?.campaign||'',
-        d2, d1,
+        d2, d1, p3,
         adsetD2: adsetD2Spend,
         adsetD1: adsetD1[adsetName]||0,
         ratio,
@@ -2773,7 +2776,7 @@ function Dashboard(){
             React.createElement('div',null,
               React.createElement('div',{style:{fontSize:15,fontWeight:700,color:'#fbbf24'}},'\uD83D\uDCB0 Budget Tankers'),
               React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},
-                'Current period (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),') vs Prior (',React.createElement('b',{style:{color:'#586880'}},d1Label),') \u2014 ads taking >75% of adset\u2019s spend, ROAS < 0.7, min $200 spend.'
+                'Top = Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),') | Mid = Prior (',React.createElement('b',{style:{color:'#586880'}},d1Label),') | [Brackets] = Past 3d \u2014 ads taking >75% of adset\u2019s spend, ROAS < 0.7, min $200.'
               ),
               React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},rows.length+' ad'+(rows.length!==1?'s':'')+' \u2014 $'+Math.round(totalSpend).toLocaleString()+' total wasted in current period')
             ),
@@ -2816,10 +2819,10 @@ function Dashboard(){
                         React.createElement('div',{style:{wordBreak:'break-word',lineHeight:1.3,fontSize:12}},r.n),
                         React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:2}},isExpanded?'\u25BC Hide parent':'\u25B6 Show parent')
                       ),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.d2.s,p14:r.d1?.s,format:'$'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.d2.p,p14:r.d1?.p,format:'n'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DualCell,{p7:r.d2.roas,p14:r.d1?.roas,format:'x',colorByRoas:true})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DualCell,{p7:r.d2.cpa,p14:r.d1?.cpa,format:'$'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2.s,prev:r.d1?.s,w7:r.p3?.s,format:'$'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2.p,prev:r.d1?.p,w7:r.p3?.p,format:'n'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:r.d2.roas,prev:r.d1?.roas,w7:r.p3?.roas,format:'x',isRoas:true})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:r.d2.cpa,prev:r.d1?.cpa,w7:r.p3?.cpa,format:'$',invert:true})),
                       React.createElement('td',{style:{...S.td,textAlign:'right'}},
                         React.createElement('div',{style:{...S.mono,fontSize:13,fontWeight:700,color:'#fbbf24'}},(r.ratio*100).toFixed(0)+'%'),
                         React.createElement('div',{style:{...S.mono,fontSize:10,color:'#586880'}},'of $'+Math.round(r.adsetD2).toLocaleString())
