@@ -989,37 +989,71 @@ function Dashboard(){
     });
   },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
 
-  // snapFiltered: snapAds filtered by applied filters, sorted by sequence asc then spend desc
+  // Campaign-level aggregation for snapshot tab (derived from adLevelRaw)
+  const snapCampaigns=useMemo(()=>{
+    const g={};
+    for(const r of adLevelRaw){const k=r.campaign;if(!k)continue;if(!g[k])g[k]=[];g[k].push(r);}
+    return Object.entries(g).map(([n,rows])=>{
+      const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      const o=ov[n]||{};
+      return{n,level:'campaign',...agg,sequence:o.sequence!=null?o.sequence:9999,experiment:o.experiment||''};
+    });
+  },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
+
+  // Adset-level aggregation for snapshot tab
+  const snapAdsets=useMemo(()=>{
+    const g={};
+    for(const r of adLevelRaw){const k=r.adset;if(!k)continue;if(!g[k])g[k]={campaign:r.campaign,rows:[]};g[k].rows.push(r);}
+    return Object.entries(g).map(([n,{campaign,rows}])=>{
+      const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
+      const o=ov[n]||{};
+      return{n,campaign,level:'adset',...agg,sequence:o.sequence!=null?o.sequence:9999,experiment:o.experiment||''};
+    });
+  },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
+
+  // Determine which level to show based on which filter is active
+  // Campaign filter → campaign rows, Adset filter → adset rows, Ad filter → ad rows
+  const snapLevel=snapAppliedCamp?'campaign':snapAppliedAdset?'adset':'ad';
+
+  // snapFiltered: filters + sorts based on active level
   const snapFiltered=useMemo(()=>{
-    let out=snapAds;
-    if(snapAppliedCamp)out=out.filter(a=>a.campaign.includes(snapAppliedCamp));
-    if(snapAppliedAdset)out=out.filter(a=>a.adset.includes(snapAppliedAdset));
-    if(snapAppliedAd)out=out.filter(a=>a.n.includes(snapAppliedAd));
+    let out;
+    if(snapLevel==='campaign'){
+      out=snapCampaigns.filter(a=>a.n.includes(snapAppliedCamp));
+    }else if(snapLevel==='adset'){
+      out=snapAdsets.filter(a=>a.n.includes(snapAppliedAdset));
+    }else{
+      out=snapAds;
+      if(snapAppliedAd)out=out.filter(a=>a.n.includes(snapAppliedAd));
+    }
     return out.sort((a,b)=>{
       const sa=a.sequence!=null?a.sequence:9999;
       const sb=b.sequence!=null?b.sequence:9999;
       if(sa!==sb)return sa-sb;
       return(b.d2?.s||0)-(a.d2?.s||0);
     });
-  },[snapAds,snapAppliedCamp,snapAppliedAdset,snapAppliedAd]);
+  },[snapLevel,snapCampaigns,snapAdsets,snapAds,snapAppliedCamp,snapAppliedAdset,snapAppliedAd]);
 
   // snapBuckets: experiment bucket summary aggregated from adLevelRaw for filtered ads
   const snapBuckets=useMemo(()=>{
+    // Get the field to map raw rows to filtered entities
+    const nameField=snapLevel==='campaign'?'campaign':snapLevel==='adset'?'adset':'name';
     const filteredNames=new Set(snapFiltered.map(a=>a.n));
-    const filteredRows=adLevelRaw.filter(r=>filteredNames.has(r.name));
-    // Group by experiment tag
+    const filteredRows=adLevelRaw.filter(r=>filteredNames.has(r[nameField]));
+    // Group by experiment tag (keyed by the entity name at active level)
     const g={};
     for(const r of filteredRows){
-      const exp=(ov[r.name]||{}).experiment||'Unassigned';
+      const entityName=r[nameField];
+      const exp=(ov[entityName]||{}).experiment||'Unassigned';
       if(!g[exp])g[exp]=[];
       g[exp].push(r);
     }
     return Object.entries(g).map(([n,rows])=>{
       const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
-      const adCount=new Set(rows.map(r=>r.name)).size;
-      return{n,adCount,...agg};
+      const entityCount=new Set(rows.map(r=>r[nameField])).size;
+      return{n,entityCount,...agg};
     }).sort((a,b)=>(b.d2?.s||0)-(a.d2?.s||0));
-  },[snapFiltered,adLevelRaw,ov,curFrom,curTo,priFrom,priTo,w7From,w7To]);
+  },[snapLevel,snapFiltered,adLevelRaw,ov,curFrom,curTo,priFrom,priTo,w7From,w7To]);
 
   // ═══ INEFFICIENCIES TAB DATA ════════════════════════════════════════════
   // Aggregate raw rows into 2 trailing windows (p7/p14) ending on curTo
@@ -2713,7 +2747,7 @@ function Dashboard(){
           'Format: Current (',React.createElement('b',{style:{color:'#94a3b8'}},d2Label),
           ') (Prior: ',React.createElement('b',{style:{color:'#475569'}},d1Label),') ',
           '[7d: ',React.createElement('b',{style:{color:'#586880'}},w7Label),']',
-          ' | ',React.createElement('span',{style:{color:'#94a3b8'}},snapFiltered.length+' ads shown')
+          ' | ',React.createElement('span',{style:{color:'#94a3b8'}},snapFiltered.length+' '+(snapLevel==='campaign'?'campaigns':snapLevel==='adset'?'adsets':'ads')+' shown')
         ),
 
         // ── Experiment Bucket Summary ──
@@ -2724,7 +2758,7 @@ function Dashboard(){
               React.createElement('thead',null,React.createElement('tr',null,
                 React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
                 React.createElement('th',{style:{...S.th,minWidth:140}},'Experiment'),
-                React.createElement('th',{style:{...S.th,textAlign:'right'}},'Ads'),
+                React.createElement('th',{style:{...S.th,textAlign:'right'}},snapLevel==='campaign'?'Camps':snapLevel==='adset'?'Adsets':'Ads'),
                 React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
                 React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
                 React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
@@ -2736,7 +2770,7 @@ function Dashboard(){
                 React.createElement('tr',{key:b.n,style:{background:i%2===0?'#0c1220':'#0e1425'}},
                   React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
                   React.createElement('td',{style:{...S.td,fontWeight:700,color:'#e2e8f0'}},b.n),
-                  React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',fontSize:12}},b.adCount),
+                  React.createElement('td',{style:{...S.td,textAlign:'right',color:'#94a3b8',fontSize:12}},b.entityCount),
                   React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.s,prev:b.d1?.s,w7:b.w7?.s,format:'$'})),
                   React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:b.d2?.p,prev:b.d1?.p,w7:b.w7?.p,format:'n'})),
                   React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:b.d2?.roas,prev:b.d1?.roas,w7:b.w7?.roas,format:'x',isRoas:true})),
@@ -2754,7 +2788,7 @@ function Dashboard(){
           React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',background:'#0c1220',borderRadius:8,overflow:'hidden'}},
             React.createElement('thead',null,React.createElement('tr',null,
               React.createElement('th',{style:{...S.th,width:32,textAlign:'center'}},'#'),
-              React.createElement('th',{style:{...S.th,minWidth:200}},'Ad Name'),
+              React.createElement('th',{style:{...S.th,minWidth:200}},snapLevel==='campaign'?'Campaign':snapLevel==='adset'?'Adset':'Ad Name'),
               React.createElement('th',{style:{...S.th,width:60,textAlign:'center'}},'Seq'),
               React.createElement('th',{style:{...S.th,minWidth:100}},'Experiment'),
               React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
@@ -2769,7 +2803,8 @@ function Dashboard(){
                 React.createElement('td',{style:{...S.td,textAlign:'center',color:'#e2e8f0',fontWeight:700,...S.mono}},(i+1)),
                 React.createElement('td',{style:{...S.td,fontWeight:500,color:'#e2e8f0',maxWidth:280}},
                   React.createElement('div',{style:{wordBreak:'break-word'}},r.n),
-                  React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.campaign,' / ',r.adset)
+                  snapLevel==='ad'&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.campaign,' / ',r.adset),
+                  snapLevel==='adset'&&r.campaign&&React.createElement('div',{style:{fontSize:10,color:'#475569',marginTop:1}},r.campaign)
                 ),
                 // Sequence input
                 React.createElement('td',{style:{...S.td,textAlign:'center'}},
@@ -2820,7 +2855,7 @@ function Dashboard(){
             ))
           )
         ):(!loading&&adLevelRaw.length>0&&React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'#475569'}},
-          React.createElement('div',{style:{fontSize:14,fontWeight:600,color:'#64748b',marginBottom:4}},'No ads match the current filters'),
+          React.createElement('div',{style:{fontSize:14,fontWeight:600,color:'#64748b',marginBottom:4}},'No '+(snapLevel==='campaign'?'campaigns':snapLevel==='adset'?'adsets':'ads')+' match the current filters'),
           React.createElement('div',{style:{fontSize:12}},'Try adjusting or clearing the filters above.')
         ))
       )
