@@ -61,14 +61,36 @@ def _get_json(url, timeout=120):
         raise RuntimeError(f"HTTP {e.code} from Meta — body: {body[:500]} — url: {safe_url[:200]}") from e
 
 
-def _paginate(initial_url, timeout=120):
-    """Walk Meta's paging.next links until exhausted."""
+def _paginate(initial_url, timeout=120, page_delay=0.3):
+    """Walk Meta's paging.next links with rate-limit retry + inter-page delay."""
     out = []
     url = initial_url
+    page = 0
     while url:
-        data = _get_json(url, timeout=timeout)
+        try:
+            data = _get_json(url, timeout=timeout)
+        except RuntimeError as e:
+            err_str = str(e)
+            # Retry on rate-limit (403/429) with exponential backoff
+            if "403" in err_str or "429" in err_str or "request limit" in err_str.lower():
+                for retry in range(3):
+                    wait = 60 * (retry + 1)  # 60s, 120s, 180s
+                    _log(f"  Rate-limited on page {page} — waiting {wait}s (retry {retry+1}/3)")
+                    time.sleep(wait)
+                    try:
+                        data = _get_json(url, timeout=timeout)
+                        break  # retry succeeded
+                    except RuntimeError:
+                        if retry == 2:
+                            raise  # exhausted retries
+                        continue
+            else:
+                raise
         out.extend(data.get("data") or [])
         url = (data.get("paging") or {}).get("next")
+        page += 1
+        if url and page_delay > 0:
+            time.sleep(page_delay)  # gentle throttle between pages
     return out
 
 
@@ -181,11 +203,22 @@ def main():
     data_out = {}
 
     try:
-        # Fire independent fetches in parallel
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            f_camp_insights = pool.submit(fetch_insights, "campaign", campaign_from, date_to)
-            f_adset_insights = pool.submit(fetch_insights, "adset", adset_from, date_to)
-            f_ad_insights = pool.submit(fetch_insights, "ad", ad_from, date_to)
+        # Sequential insights fetches to avoid rate-limit from hammering Meta
+        # with 6 parallel paginated streams. Entity metadata fetches are
+        # lightweight and run in parallel afterward.
+        _log("Fetching insights sequentially (campaign → adset → ad)...")
+        data_out["campaign_insights"] = fetch_insights("campaign", campaign_from, date_to)
+        _log(f"  campaign insights: {len(data_out['campaign_insights'])} rows ({time.time()-start:.1f}s)")
+
+        data_out["adset_insights"] = fetch_insights("adset", adset_from, date_to)
+        _log(f"  adset insights:    {len(data_out['adset_insights'])} rows ({time.time()-start:.1f}s)")
+
+        data_out["ad_insights"] = fetch_insights("ad", ad_from, date_to)
+        _log(f"  ad insights:       {len(data_out['ad_insights'])} rows ({time.time()-start:.1f}s)")
+
+        # Entity metadata — lightweight, can run in parallel
+        _log("Fetching active entity metadata...")
+        with ThreadPoolExecutor(max_workers=3) as pool:
             f_active_camps = pool.submit(
                 fetch_active_entities,
                 "campaigns",
@@ -195,13 +228,6 @@ def main():
                 fetch_active_entities, "adsets", "daily_budget,campaign_id,effective_status"
             )
             f_active_ads = pool.submit(fetch_active_entities, "ads", "effective_status")
-
-            data_out["campaign_insights"] = f_camp_insights.result()
-            _log(f"  campaign insights: {len(data_out['campaign_insights'])} rows ({time.time()-start:.1f}s)")
-            data_out["adset_insights"] = f_adset_insights.result()
-            _log(f"  adset insights:    {len(data_out['adset_insights'])} rows ({time.time()-start:.1f}s)")
-            data_out["ad_insights"] = f_ad_insights.result()
-            _log(f"  ad insights:       {len(data_out['ad_insights'])} rows ({time.time()-start:.1f}s)")
             data_out["active_campaigns"] = f_active_camps.result()
             _log(f"  active campaigns:  {len(data_out['active_campaigns'])}")
             data_out["active_adsets"] = f_active_adsets.result()
