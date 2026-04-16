@@ -970,7 +970,7 @@ function Dashboard(){
       const agg=aggregate(rows,curFrom,curTo,priFrom,priTo,w7From,w7To);
       const adId=rows[0]?.adId||'';
       const o=ov[n]||{};
-      return{n,adId,...agg,persona:o.persona||'Untagged',format:o.format||'Untagged'};
+      return{n,adId,campaign:rows[0]?.campaign||'',adset:rows[0]?.adset||'',...agg,persona:o.persona||'Untagged',format:o.format||'Untagged'};
     });
   },[adLevelRaw,curFrom,curTo,priFrom,priTo,w7From,w7To,ov]);
 
@@ -1585,6 +1585,14 @@ function Dashboard(){
       campToAngles[a.campaign].add(angle);
     }
     const ineffCampNames=new Set(ineffCamps.map(c=>c.n));
+    // Build per-campaign count maps from existing report memos
+    const countByCamp=(list,field)=>{const m={};for(const r of list){const k=r[field]||'';m[k]=(m[k]||0)+1;}return m;};
+    const gmByCamp=countByCamp(goldMineAds,'campaign');
+    const vsByCamp=countByCamp(volumeAds,'campaign');
+    const btByCamp=countByCamp(budgetTankers,'campaign');
+    const ineffAdsetByCamp=countByCamp(ineffAdsets,'campaign');
+    const ineffAdByCamp=countByCamp(ineffAds,'campaign');
+
     const result={};
     for(const c of campMgmtList){
       const badges=[];
@@ -1592,20 +1600,36 @@ function Dashboard(){
       const angles=campToAngles[c.name]||new Set();
       for(const angle of angles){
         const desc=notes['angles::'+angle];
-        if(desc&&/scale/i.test(desc)){badges.push({type:'scaling',label:'\u26A1 Scaling Angle Present',color:'#a78bfa'});break;}
+        if(desc&&/scale/i.test(desc)){badges.push({type:'scaling',label:'\u26A1 Scaling Angle',color:'#a78bfa'});break;}
       }
       // Scale-up candidate
       if(c.d2.roas>=1.0&&c.d1&&c.d2.roas>c.d1.roas){
-        badges.push({type:'scaleup',label:'\u25B2 Scale-Up Candidate',color:'#34d399'});
+        badges.push({type:'scaleup',label:'\u25B2 Scale-Up',color:'#34d399'});
       }
-      // Red alert
+      // Gold Mine ads
+      const gm=gmByCamp[c.name]||0;
+      if(gm>0) badges.push({type:'goldmine',label:'\u26CF '+gm+' Gold Mine ad'+(gm>1?'s':''),color:'#fbbf24'});
+      // Volume Scaler ads
+      const vs=vsByCamp[c.name]||0;
+      if(vs>0) badges.push({type:'volume',label:'\u26A1 '+vs+' Vol Scaler ad'+(vs>1?'s':''),color:'#3b82f6'});
+      // Budget Tankers
+      const bt=btByCamp[c.name]||0;
+      if(bt>0) badges.push({type:'tanker',label:'\uD83D\uDCB0 '+bt+' Budget Tanker'+(bt>1?'s':''),color:'#fbbf24'});
+      // Red alert (campaign level)
       if(ineffCampNames.has(c.name)){
-        badges.push({type:'redalert',label:'\uD83D\uDEA8 In Red Alert',color:'#f87171'});
+        badges.push({type:'redalert',label:'\uD83D\uDEA8 Campaign in Red Alert',color:'#f87171'});
       }
+      // Inefficient adsets within this campaign
+      const ia=ineffAdsetByCamp[c.name]||0;
+      if(ia>0) badges.push({type:'ineffadset',label:'\u26A0 '+ia+' ineff adset'+(ia>1?'s':''),color:'#fb923c'});
+      // Inefficient ads within this campaign
+      const iad=ineffAdByCamp[c.name]||0;
+      if(iad>0) badges.push({type:'ineffad',label:'\u26A0 '+iad+' ineff ad'+(iad>1?'s':''),color:'#fb923c'});
+
       result[c.name]=badges;
     }
     return result;
-  },[campMgmtList,adsetRaw,ov,notes,ineffCamps]);
+  },[campMgmtList,adsetRaw,ov,notes,ineffCamps,goldMineAds,volumeAds,budgetTankers,ineffAdsets,ineffAds]);
 
   // Strategic recommendation from guardrails
   const recommendationFor=(roas,upper,lower)=>{
