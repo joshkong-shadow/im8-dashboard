@@ -2,8 +2,9 @@ name: Meta Data Snapshot
 
 on:
   schedule:
-    # 8am/12pm/4pm MYT (UTC+8) = 00:00/04:00/08:00 UTC
-    - cron: '0 0,4,8 * * *'
+    # 7am/11am/3pm MYT (1h earlier to compensate for GitHub's ~1.5h cron delay)
+    # = 23:00/03:00/07:00 UTC
+    - cron: '0 23,3,7 * * *'
   workflow_dispatch:
     inputs:
       reason:

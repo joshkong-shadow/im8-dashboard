@@ -1210,10 +1210,10 @@ function Dashboard(){
     return{p7:sumRange(w7From,curTo),p14:sumRange(w14From,curTo)};
   },[w7From,w14From,curTo]);
 
-  // Lazy-fetch unfiltered campaign + adset data for the Inefficiencies tab,
-  // the Inefficiencies Summary section, and the Campaign Management tab.
-  // Other tabs use the main filtered fetch.
+  // Lazy-fetch unfiltered campaign + adset data — only used as fallback when
+  // snapshot mode is NOT active. Snapshot fetchData already populates this.
   useEffect(()=>{
+    if(snapshotMeta)return; // snapshot already loaded this data
     if((tab!=='inefficiencies'&&tab!=='summary'&&tab!=='campmgmt')||!config)return;
     if(ineffCampRaw.length>0||ineffMainLoading)return; // already loaded/loading
     setIneffMainLoading(true);setIneffMainError('');
@@ -1230,9 +1230,11 @@ function Dashboard(){
   // Reset ineff campaign/adset cache when date window changes
   useEffect(()=>{setIneffCampRaw([]);setIneffAdsetRaw([]);},[w14From,curTo]);
 
-  // Lazy-fetch active campaigns + adsets WITH metadata (budget, bid strategy)
-  // for Campaign Mgmt tab + Save Reports button (Summary tab also needs it).
+  // Lazy-fetch active campaigns + adsets WITH metadata (budget, bid strategy).
+  // In snapshot mode (snapshotMeta set), this data is already populated by
+  // fetchData — skip the direct Meta call to avoid rate-limit errors.
   useEffect(()=>{
+    if(snapshotMeta)return; // snapshot already loaded this data
     if((tab!=='campmgmt'&&tab!=='summary')||!config)return;
     if(campMgmtCampsMeta!==null||campMgmtLoading)return;
     setCampMgmtLoading(true);setCampMgmtError('');
@@ -1242,15 +1244,16 @@ function Dashboard(){
     ]).then(([camps,adsets])=>{
       setCampMgmtCampsMeta(camps);setCampMgmtAdsetsMeta(adsets);setCampMgmtLoading(false);
     }).catch(e=>{setCampMgmtError(e.message);setCampMgmtLoading(false);});
-  },[tab,config,campMgmtCampsMeta,campMgmtLoading]);
+  },[tab,config,campMgmtCampsMeta,campMgmtLoading,snapshotMeta]);
 
   // Also trigger the existing ineff camp/adset insights fetch on campmgmt tab
   // (for p7d + today/prior insights). Existing effect already covers summary
   // and inefficiencies — we just need it to fire on campmgmt too.
 
-  // Lazy-fetch active entity IDs (campaigns + adsets + ads, in parallel)
-  // used by Inefficiencies to exclude paused/archived entries.
+  // Lazy-fetch active entity IDs — only used as fallback when snapshot mode
+  // is NOT active. Snapshot fetchData already populates these sets.
   useEffect(()=>{
+    if(snapshotMeta)return; // snapshot already loaded this data
     if((tab!=='inefficiencies'&&tab!=='summary'&&tab!=='campmgmt')||!config)return;
     if(activeAdIds!==null||activeAdsLoading)return; // already loaded/loading
     setActiveAdsLoading(true);setActiveAdsError('');
