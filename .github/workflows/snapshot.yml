@@ -2,9 +2,9 @@ name: Meta Data Snapshot
 
 on:
   schedule:
-    # 7am/11am/3pm/8pm MYT (1h earlier to compensate for GitHub's ~1.5h cron delay)
-    # = 23:00/03:00/07:00/12:00 UTC → arrives ~8:30am/12:30pm/4:30pm/9:30pm MYT
-    - cron: '0 23,3,7,12 * * *'
+    # 7am/11am/3pm/9pm MYT (1h earlier to compensate for GitHub's ~1.5h cron delay)
+    # = 23:00/03:00/07:00/13:00 UTC → arrives ~8:30am/12:30pm/4:30pm/10:30pm MYT
+    - cron: '0 23,3,7,13 * * *'
   workflow_dispatch:
     inputs:
       reason:
