@@ -488,6 +488,63 @@
     "260413 Dr James Dinic (IG Posts)  > PDPPRO Lander_ALT* [GvsC]": {
       "angle": "DrJames",
       "lander": "Main-PDP"
+    },
+    "260414_NEW DAD_Dad lander_ALT*  [INT_14/4]": {
+      "angle": "New Dad"
+    },
+    "260414_COMPETITIVE AMATEURS_Competitive lander_ALT*  [INT_14/4]": {
+      "angle": "Competitive Amateurs"
+    },
+    "260413 Collagen Restorer ICP#2 PDPPRO_ALT* [GvsC]  [INT_13/4]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260408 Health Condition Solution Seeker #1 - winners from ori adset (Why IM8 lander)_ALT* [INT_16/4]": {
+      "angle": "Health Conditions"
+    },
+    "260403_FREQUENTFLYERS_Travelers Lander_ALT* [INT_16/4]": {
+      "angle": "Frequent Flyers"
+    },
+    "260402 Giannis > GIANNISLDP_ALT*": {
+      "angle": "GIannis"
+    },
+    "260402 Skin/Hair/Nails Collagen ICP #2_ALT* [INT_10/4]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260402 Skin/Hair/Nails Collagen ICP_ALT* [INT_10/4]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260313 Collagen Restorer ICP_ALT*  [INT_10/4]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260317 Collagen Restorer ICP#2_ALT* [GvsC]  [INT_10/4]": {
+      "angle": "Hair, Skin & Nails"
+    },
+    "260326_JOINT RECOVERY SEEKER >30 _Joints lander_ALT* [INT_16/4]": {
+      "angle": "Joints"
+    },
+    "260331_JOINT RECOVERY SEEKER#2 >30 _Joints lander_ALT* [INT_16/4]": {
+      "angle": "Joints"
+    },
+    "260406 VIDs > GIANNISLDP_ALT*": {
+      "angle": "GIannis"
+    },
+    "260408_HEALTHCONDITIONDRIVEN_Health Lander_ALT* [INT_16/4]": {
+      "angle": "Health Conditions"
+    },
+    "260408 Health Condition Solution Seeker #2(Why IM8 lander)_ALT* [INT_16/4]": {
+      "angle": "Health Conditions"
+    },
+    "260414_JUST TURNED 40 >40 Age_Over 40 lander_ALT*  [INT_14/4]": {
+      "angle": "Aging after 40"
+    },
+    "260414_FASHION IMAGE MAN_Image lander_ALT*  [INT_14/4]": {
+      "angle": "Fashion Concious Man"
+    },
+    "260414_LUXURY CONSUMERS_Luxury lander_ALT*  [INT_14/4]": {
+      "angle": "Luxury Consumers"
+    },
+    "260416 ACTIVE AGER_ PDP(Longevity) lander_ALT*": {
+      "angle": "Aging - General"
     }
   },
   "notes": {
@@ -690,5 +747,6 @@
     "Health Conditions": "Persona",
     "MIXED": "Mixed",
     "Main-PDP": "Main PDP"
-  }
+  },
+  "snapshotViews": []
 }
