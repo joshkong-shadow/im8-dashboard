@@ -771,6 +771,7 @@ function Dashboard(){
   const[ciMetric,setCiMetric]=useState('roas');
   const[ciFatigueOnly,setCiFatigueOnly]=useState(false);
   const[ciExpandedDims,setCiExpandedDims]=useState({}); // {format:true, icp:true, ...} tracks which dim tables are expanded
+  const[ciSort,setCiSort]=useState({}); // {format:{field:'s',dir:'desc'}, ...} per-dimension sort state
 
   const[bn,setBn]=useState('');
   const[fms,setFms]=useState(0);
@@ -3386,60 +3387,24 @@ function Dashboard(){
         return'#e2e8f0';
       };
 
+      // Sort handler for dimension tables
+      const handleDimSort=(dimName,field)=>{
+        setCiSort(prev=>{
+          const cur=prev[dimName]||{field:'s',dir:'desc'};
+          if(cur.field===field)return{...prev,[dimName]:{field,dir:cur.dir==='desc'?'asc':'desc'}};
+          return{...prev,[dimName]:{field,dir:'desc'}};
+        });
+      };
+      const sortArrow=(dimName,field)=>{
+        const cur=ciSort[dimName];
+        if(!cur||cur.field!==field)return'';
+        return cur.dir==='desc'?' \u25BC':' \u25B2';
+      };
+      const sortTh=(dimName,field,label,style)=>React.createElement('th',{style:{...style,cursor:'pointer',userSelect:'none'},onClick:()=>handleDimSort(dimName,field)},label+sortArrow(dimName,field));
+
       return React.createElement('div',{style:{paddingBottom:40},className:'fade-in'},
 
-        // ── Section 1: Dimension Breakdown Tables ──
-        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Dimension Breakdowns'),
-        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(520px,1fr))',gap:16,marginBottom:32}},
-          ciDimOptions.map(dim=>{
-            const tableData=ciDimensionTables[dim.value]||[];
-            const isExpanded=ciExpandedDims[dim.value];
-            const visible=isExpanded?tableData:tableData.slice(0,10);
-            const remaining=tableData.length-10;
-            return React.createElement('div',{key:dim.value,style:{background:'#0c1220',borderRadius:8,border:'1px solid #1e293b',overflow:'hidden'}},
-              React.createElement('div',{style:{padding:'10px 14px',borderBottom:'1px solid #1e293b',fontSize:12,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.5px',display:'flex',justifyContent:'space-between',alignItems:'center'}},
-                React.createElement('span',null,dim.label),
-                React.createElement('span',{style:{fontSize:10,fontWeight:500,color:'#475569'}},tableData.length+' values')
-              ),
-              React.createElement('div',{style:{overflowX:'auto'}},
-                React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
-                  React.createElement('thead',null,React.createElement('tr',null,
-                    React.createElement('th',{style:{...S.th,width:28,textAlign:'center'}},'#'),
-                    React.createElement('th',{style:{...S.th,minWidth:100}},'Value'),
-                    React.createElement('th',{style:{...S.th,textAlign:'center',width:40}},'Ads'),
-                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'Spend'),
-                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'Purch'),
-                    React.createElement('th',{style:{...S.th,textAlign:'center'}},'ROAS'),
-                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'CPA'),
-                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'ATC%'),
-                    React.createElement('th',{style:{...S.th,textAlign:'right'}},'CVR%')
-                  )),
-                  React.createElement('tbody',null,
-                    visible.map((row,i)=>React.createElement('tr',{key:row.dimValue,style:{background:i%2===0?'transparent':'#0a0f1a'}},
-                      React.createElement('td',{style:{...S.td,textAlign:'center',color:'#475569',fontSize:11}},i+1),
-                      React.createElement('td',{style:{...S.td,fontSize:12,fontWeight:600,color:'#e2e8f0',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},row.dimValue),
-                      React.createElement('td',{style:{...S.td,textAlign:'center',fontSize:11,color:'#64748b'}},row.adCount),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.s,prev:row.d1?.s,w7:row.w7?.s,format:'$'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.p,prev:row.d1?.p,w7:row.w7?.p,format:'n'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:row.d2?.roas,prev:row.d1?.roas,w7:row.w7?.roas,format:'x',isRoas:true})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.cpa,prev:row.d1?.cpa,w7:row.w7?.cpa,format:'$',invert:true})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.atc,prev:row.d1?.atc,w7:row.w7?.atc,format:'%'})),
-                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.cvr,prev:row.d1?.cvr,w7:row.w7?.cvr,format:'cvr'}))
-                    ))
-                  )
-                )
-              ),
-              !isExpanded&&remaining>0&&React.createElement('div',{style:{padding:'8px 14px',borderTop:'1px solid #1e293b',textAlign:'center'}},
-                React.createElement('button',{onClick:()=>setCiExpandedDims(p=>({...p,[dim.value]:true})),style:{background:'none',border:'none',color:'#3b82f6',fontSize:11,fontWeight:600,cursor:'pointer'}},'See all '+tableData.length+' (+'+remaining+' more)')
-              ),
-              isExpanded&&remaining>0&&React.createElement('div',{style:{padding:'8px 14px',borderTop:'1px solid #1e293b',textAlign:'center'}},
-                React.createElement('button',{onClick:()=>setCiExpandedDims(p=>({...p,[dim.value]:false})),style:{background:'none',border:'none',color:'#64748b',fontSize:11,cursor:'pointer'}},'Show top 10 only')
-              )
-            );
-          })
-        ),
-
-        // ── Section 2: Pivot Matrix ──
+        // ── Section 1: Pivot Matrix ──
         React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Pivot Matrix'),
         React.createElement('div',{style:{display:'flex',gap:12,marginBottom:16,alignItems:'center',flexWrap:'wrap'}},
           React.createElement('label',{style:{fontSize:11,color:'#64748b'}},'Rows:'),
@@ -3476,7 +3441,65 @@ function Dashboard(){
               ))
             )
           )
-        ):React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12}},'No data for pivot matrix.'),
+        ):React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12,marginBottom:32}},'No data for pivot matrix.'),
+
+        // ── Section 2: Dimension Breakdowns ──
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Dimension Breakdowns'),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(520px,1fr))',gap:16,marginBottom:32}},
+          ciDimOptions.map(dim=>{
+            const tableData=ciDimensionTables[dim.value]||[];
+            const isExpanded=ciExpandedDims[dim.value];
+            const sort=ciSort[dim.value]||{field:'s',dir:'desc'};
+            const sorted=[...tableData].sort((a,b)=>{
+              let va,vb;
+              if(sort.field==='adCount'){va=a.adCount||0;vb=b.adCount||0;}
+              else{va=a.d2?.[sort.field]||0;vb=b.d2?.[sort.field]||0;}
+              return sort.dir==='desc'?vb-va:va-vb;
+            });
+            const visible=isExpanded?sorted:sorted.slice(0,10);
+            const remaining=tableData.length-10;
+            return React.createElement('div',{key:dim.value,style:{background:'#0c1220',borderRadius:8,border:'1px solid #1e293b',overflow:'hidden'}},
+              React.createElement('div',{style:{padding:'10px 14px',borderBottom:'1px solid #1e293b',fontSize:12,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.5px',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+                React.createElement('span',null,dim.label),
+                React.createElement('span',{style:{fontSize:10,fontWeight:500,color:'#475569'}},tableData.length+' values')
+              ),
+              React.createElement('div',{style:{overflowX:'auto'}},
+                React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
+                  React.createElement('thead',null,React.createElement('tr',null,
+                    React.createElement('th',{style:{...S.th,width:28,textAlign:'center'}},'#'),
+                    React.createElement('th',{style:{...S.th,minWidth:100}},'Value'),
+                    sortTh(dim.value,'adCount','Ads',{...S.th,textAlign:'center',width:40}),
+                    sortTh(dim.value,'s','Spend',{...S.th,textAlign:'right'}),
+                    sortTh(dim.value,'p','Purch',{...S.th,textAlign:'right'}),
+                    sortTh(dim.value,'roas','ROAS',{...S.th,textAlign:'center'}),
+                    sortTh(dim.value,'cpa','CPA',{...S.th,textAlign:'right'}),
+                    sortTh(dim.value,'atc','ATC%',{...S.th,textAlign:'right'}),
+                    sortTh(dim.value,'cvr','CVR%',{...S.th,textAlign:'right'})
+                  )),
+                  React.createElement('tbody',null,
+                    visible.map((row,i)=>React.createElement('tr',{key:row.dimValue,style:{background:i%2===0?'transparent':'#0a0f1a'}},
+                      React.createElement('td',{style:{...S.td,textAlign:'center',color:'#475569',fontSize:11}},i+1),
+                      React.createElement('td',{style:{...S.td,fontSize:12,fontWeight:600,color:'#e2e8f0',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},row.dimValue),
+                      React.createElement('td',{style:{...S.td,textAlign:'center',fontSize:11,color:'#64748b'}},row.adCount),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.s,prev:row.d1?.s,w7:row.w7?.s,format:'$'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.p,prev:row.d1?.p,w7:row.w7?.p,format:'n'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'center'}},React.createElement(DoDCell,{cur:row.d2?.roas,prev:row.d1?.roas,w7:row.w7?.roas,format:'x',isRoas:true})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.cpa,prev:row.d1?.cpa,w7:row.w7?.cpa,format:'$',invert:true})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.atc,prev:row.d1?.atc,w7:row.w7?.atc,format:'%'})),
+                      React.createElement('td',{style:{...S.td,textAlign:'right'}},React.createElement(DoDCell,{cur:row.d2?.cvr,prev:row.d1?.cvr,w7:row.w7?.cvr,format:'cvr'}))
+                    ))
+                  )
+                )
+              ),
+              !isExpanded&&remaining>0&&React.createElement('div',{style:{padding:'8px 14px',borderTop:'1px solid #1e293b',textAlign:'center'}},
+                React.createElement('button',{onClick:()=>setCiExpandedDims(p=>({...p,[dim.value]:true})),style:{background:'none',border:'none',color:'#3b82f6',fontSize:11,fontWeight:600,cursor:'pointer'}},'See all '+tableData.length+' (+'+remaining+' more)')
+              ),
+              isExpanded&&remaining>0&&React.createElement('div',{style:{padding:'8px 14px',borderTop:'1px solid #1e293b',textAlign:'center'}},
+                React.createElement('button',{onClick:()=>setCiExpandedDims(p=>({...p,[dim.value]:false})),style:{background:'none',border:'none',color:'#64748b',fontSize:11,cursor:'pointer'}},'Show top 10 only')
+              )
+            );
+          })
+        ),
 
         // ── Section 3: Creative Fatigue Tracker ──
         React.createElement('div',{style:{fontSize:14,fontWeight:700,color:'#e2e8f0',marginBottom:12}},'Creative Fatigue Tracker',
