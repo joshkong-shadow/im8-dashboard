@@ -451,7 +451,9 @@
     },
     "260318 ANGLE 7: Gut Health _ALT* [GvsC]": {
       "angle": "Gut Health",
-      "lander": "GETGUT Lander"
+      "lander": "GETGUT Lander",
+      "experiment": "Get Domain",
+      "sequence": 3
     },
     "260317 Collagen Restorer ICP#2_ALT* [GvsC]": {
       "angle": "Hair, Skin & Nails",
@@ -459,27 +461,39 @@
     },
     "260317 GLP-1#2_GLP1 lander_ALT* [GvsC]": {
       "angle": "GLP-1",
-      "lander": "GLP-1"
+      "lander": "GLP-1",
+      "experiment": "Get Domain",
+      "sequence": 2
     },
     "260325 Dr James Dinic (IG Posts) - 16IN1DRJAMES  > 16IN1DRJAMES Lander_ALT* [GvsC]": {
       "angle": "DrJames",
-      "lander": "Dr James"
+      "lander": "Dr James",
+      "experiment": "Get Domain",
+      "sequence": 4
     },
     "260401_WEIGHT MANAGEMENT SEEKER_Weight lander_ALT* [GvsC]": {
       "angle": "Weight",
-      "lander": "Weight"
+      "lander": "Weight",
+      "experiment": "Get Domain",
+      "sequence": 5
     },
     "260413 GLP-1#2_PDPPRO lander_ALT* [GvsC]": {
       "angle": "GLP-1",
-      "lander": "Main-PDP"
+      "lander": "Main-PDP",
+      "experiment": "Main PDP",
+      "sequence": 2
     },
     "260413_WEIGHT MANAGEMENT SEEKER_PDPPRO_ALT* [GvsC]": {
       "angle": "Weight",
-      "lander": "Main-PDP"
+      "lander": "Main-PDP",
+      "experiment": "Main PDP",
+      "sequence": 5
     },
     "260413 ANGLE 7: Gut Health PDPPRO_ALT* [GvsC]": {
       "angle": "Gut Health",
-      "lander": "Main-PDP"
+      "lander": "Main-PDP",
+      "experiment": "Main PDP",
+      "sequence": 3
     },
     "260413 Collagen Restorer ICP#2 PDPPRO_ALT* [GvsC]": {
       "angle": "Hair, Skin & Nails",
@@ -487,64 +501,97 @@
     },
     "260413 Dr James Dinic (IG Posts)  > PDPPRO Lander_ALT* [GvsC]": {
       "angle": "DrJames",
-      "lander": "Main-PDP"
+      "lander": "Main-PDP",
+      "experiment": "Main PDP",
+      "sequence": 4
     },
     "260414_NEW DAD_Dad lander_ALT*  [INT_14/4]": {
-      "angle": "New Dad"
+      "angle": "New Dad",
+      "lander": "New Dads"
     },
     "260414_COMPETITIVE AMATEURS_Competitive lander_ALT*  [INT_14/4]": {
-      "angle": "Competitive Amateurs"
+      "angle": "Competitive Amateurs",
+      "lander": "Competitive Amateurs"
     },
     "260413 Collagen Restorer ICP#2 PDPPRO_ALT* [GvsC]  [INT_13/4]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Main-PDP",
+      "experiment": "Main PDP",
+      "sequence": 6
     },
     "260408 Health Condition Solution Seeker #1 - winners from ori adset (Why IM8 lander)_ALT* [INT_16/4]": {
-      "angle": "Health Conditions"
+      "angle": "Health Conditions",
+      "lander": "Why IM8"
     },
     "260403_FREQUENTFLYERS_Travelers Lander_ALT* [INT_16/4]": {
-      "angle": "Frequent Flyers"
+      "angle": "Frequent Flyers",
+      "lander": "Frequent Flyers"
     },
     "260402 Giannis > GIANNISLDP_ALT*": {
-      "angle": "GIannis"
+      "angle": "GIannis",
+      "lander": "Giannis"
     },
     "260402 Skin/Hair/Nails Collagen ICP #2_ALT* [INT_10/4]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260402 Skin/Hair/Nails Collagen ICP_ALT* [INT_10/4]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260313 Collagen Restorer ICP_ALT*  [INT_10/4]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails"
     },
     "260317 Collagen Restorer ICP#2_ALT* [GvsC]  [INT_10/4]": {
-      "angle": "Hair, Skin & Nails"
+      "angle": "Hair, Skin & Nails",
+      "lander": "Hair, Skin & Nails",
+      "experiment": "Get Domain",
+      "sequence": 6
     },
     "260326_JOINT RECOVERY SEEKER >30 _Joints lander_ALT* [INT_16/4]": {
-      "angle": "Joints"
+      "angle": "Joints",
+      "lander": "Joint Health"
     },
     "260331_JOINT RECOVERY SEEKER#2 >30 _Joints lander_ALT* [INT_16/4]": {
-      "angle": "Joints"
+      "angle": "Joints",
+      "lander": "Joint Health"
     },
     "260406 VIDs > GIANNISLDP_ALT*": {
-      "angle": "GIannis"
+      "angle": "GIannis",
+      "lander": "Giannis"
     },
     "260408_HEALTHCONDITIONDRIVEN_Health Lander_ALT* [INT_16/4]": {
-      "angle": "Health Conditions"
+      "angle": "Health Conditions",
+      "lander": "Health Lander"
     },
     "260408 Health Condition Solution Seeker #2(Why IM8 lander)_ALT* [INT_16/4]": {
-      "angle": "Health Conditions"
+      "angle": "Health Conditions",
+      "lander": "Why IM8"
     },
     "260414_JUST TURNED 40 >40 Age_Over 40 lander_ALT*  [INT_14/4]": {
-      "angle": "Aging after 40"
+      "angle": "Aging after 40",
+      "lander": "Aging after 40"
     },
     "260414_FASHION IMAGE MAN_Image lander_ALT*  [INT_14/4]": {
-      "angle": "Fashion Concious Man"
+      "angle": "Fashion Concious Man",
+      "lander": "Fashion Concious Man"
     },
     "260414_LUXURY CONSUMERS_Luxury lander_ALT*  [INT_14/4]": {
-      "angle": "Luxury Consumers"
+      "angle": "Luxury Consumers",
+      "lander": "Luxury Consumers"
     },
     "260416 ACTIVE AGER_ PDP(Longevity) lander_ALT*": {
-      "angle": "Aging - General"
+      "angle": "Aging - General",
+      "lander": "Longevity PDP"
+    },
+    "260303 Top 50 L30D Winners > GET.PDP [GvsC]": {
+      "experiment": "Get Domain",
+      "sequence": 1
+    },
+    "260413 Top 50 L30D Winners > PDPPRO [GvsC]": {
+      "experiment": "Main PDP",
+      "sequence": 1
     }
   },
   "notes": {
@@ -697,7 +744,16 @@
     "campaigns::L3 | 20260326_TOFU_GLOBAL_ASCCBO_AUTO_LC_ICP_SLEEP(NERMW3-11PERSONA)_MT*": "Sleep",
     "landers::Dr James": "Ambassador - Dr James",
     "landers::Health Conditions": "Persona - /Health-condition",
-    "landers::Beauty": "Persona - /beauty"
+    "landers::Beauty": "Persona - /beauty",
+    "landers::Joint Health": "Persona - /joints",
+    "landers::Giannis": "Ambassador - Giannis",
+    "landers::Main-PDP": "Main PDP",
+    "landers::Aging after 40": "Persona - /40",
+    "landers::Competitive Amateurs": "X Reasons - /competitive",
+    "landers::Fashion Concious Man": "X Reasons - /image",
+    "landers::Luxury Consumers": "X Reasons - /luxury",
+    "landers::New Dads": "X Reasons - /dad",
+    "landers::Health Lander": "Persona - /health-condition"
   },
   "buckets": {
     "GLP-1": "X Reasons",
@@ -748,5 +804,14 @@
     "MIXED": "Mixed",
     "Main-PDP": "Main PDP"
   },
-  "snapshotViews": []
+  "snapshotViews": [
+    {
+      "name": "GvsC (Get vs PDP)",
+      "filters": {
+        "campaign": "",
+        "adset": "GvsC",
+        "ad": ""
+      }
+    }
+  ]
 }
