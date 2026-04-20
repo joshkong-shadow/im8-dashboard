@@ -592,6 +592,66 @@
     "260413 Top 50 L30D Winners > PDPPRO [GvsC]": {
       "experiment": "Main PDP",
       "sequence": 1
+    },
+    "260408_GIFTGIVERS_Gift Lander_ALT*": {
+      "angle": "Gifting"
+    },
+    "260408 ANGLE 8: Aging After 30  (Gave them back energy & clarity)_ALT* [INT_16/4]": {
+      "angle": "Aging after 30"
+    },
+    "260409 ASPIRATIONAL ATHLETE_Perform lander_ALT* [INT_17/4]": {
+      "angle": "Competitive Amateurs"
+    },
+    "260409 BUSY MOM > 28 _Busy mom landers_ALT* [INT_16/4]": {
+      "angle": "Busy Moms"
+    },
+    "260409 COMPETITIVE AMATEUR_Perform lander_ALT*": {
+      "angle": "Competitive Amateurs"
+    },
+    "260409 HIGH PERFORMER_High performer lander_ALT* [INT_17/4]": {
+      "angle": "High Performers"
+    },
+    "260409 MIDLIFE RECALIBRATOR > 40 _Midlife lander_ALT* [INT_16/4]": {
+      "angle": "Midlife Recalibrator"
+    },
+    "260409 INFORMED SCEPTIC_Skeptic lander_ALT* [INT_16/4]": {
+      "angle": "Supplement Skeptics"
+    },
+    "260409 PREMIUM MINIMALIST_Minimalist lander_ALT* [INT_16/4]": {
+      "angle": "Premium Minimalists"
+    },
+    "260410 DOCTORS_Doctor lander_ALT* [INT_17/4]": {
+      "angle": "Doctors"
+    },
+    "260410 LAWYERS_Lawyer lander_ALT* (MOVED TO #2 15 PERSONA)": {
+      "angle": "Lawyers"
+    },
+    "260414 LAWYERS_Lawyer lander_ALT* [INT_17/4]": {
+      "angle": "Lawyers"
+    },
+    "260416 ANGLE 8: Aging After 30_ PDP(Longevity) lander_ALT* [INT_16/4]": {
+      "angle": "Aging after 30"
+    },
+    "260417 (Potentials only) Aging After 30_ Just turned 40 lander_ALT* [INT_17/4]": {
+      "angle": "Aging after 30"
+    },
+    "260417_FINANCE BROS_Finance lander_ALT*  [INT_17/4]": {
+      "angle": "Finance Bros"
+    },
+    "260417_DIVORCED GUY_Rebuild lander_ALT*": {
+      "angle": "Divorced Dads"
+    },
+    "260417_FOUNDER ENTREPRENEURS_Founder lander_ALT*  [INT_17/4]": {
+      "angle": "Founder / Entrepreneur"
+    },
+    "260410 WELLNESS CONVERTERS_Begin lander_ALT* (MOVED TO #2 15 PERSONA)": {
+      "angle": "Wellness Converters"
+    },
+    "260414 WELLNESS CONVERTERS_Begin lander_ALT* [INT_17/4]": {
+      "angle": "Wellness Converters"
+    },
+    "260417_WELLNESS WARRIOR DAD_Warrior dad lander_ALT*  [INT_17/4]": {
+      "angle": "Weekend Warrior Dads"
     }
   },
   "notes": {
