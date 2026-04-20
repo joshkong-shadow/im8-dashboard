@@ -594,64 +594,84 @@
       "sequence": 1
     },
     "260408_GIFTGIVERS_Gift Lander_ALT*": {
-      "angle": "Gifting"
+      "angle": "Gifting",
+      "lander": "Gifting"
     },
     "260408 ANGLE 8: Aging After 30  (Gave them back energy & clarity)_ALT* [INT_16/4]": {
-      "angle": "Aging after 30"
+      "angle": "Aging after 30",
+      "lander": "Feel Again Lander"
     },
     "260409 ASPIRATIONAL ATHLETE_Perform lander_ALT* [INT_17/4]": {
-      "angle": "Competitive Amateurs"
+      "angle": "Competitive Amateurs",
+      "lander": "Aspirational Athletes"
     },
     "260409 BUSY MOM > 28 _Busy mom landers_ALT* [INT_16/4]": {
-      "angle": "Busy Moms"
+      "angle": "Busy Moms",
+      "lander": "Busy Mom"
     },
     "260409 COMPETITIVE AMATEUR_Perform lander_ALT*": {
-      "angle": "Competitive Amateurs"
+      "angle": "Competitive Amateurs",
+      "lander": "Aspirational Athletes"
     },
     "260409 HIGH PERFORMER_High performer lander_ALT* [INT_17/4]": {
-      "angle": "High Performers"
+      "angle": "High Performers",
+      "lander": "High Performers"
     },
     "260409 MIDLIFE RECALIBRATOR > 40 _Midlife lander_ALT* [INT_16/4]": {
-      "angle": "Midlife Recalibrator"
+      "angle": "Midlife Recalibrator",
+      "lander": "Midlife Recalibrators"
     },
     "260409 INFORMED SCEPTIC_Skeptic lander_ALT* [INT_16/4]": {
-      "angle": "Supplement Skeptics"
+      "angle": "Supplement Skeptics",
+      "lander": "Supplement Skeptics"
     },
     "260409 PREMIUM MINIMALIST_Minimalist lander_ALT* [INT_16/4]": {
-      "angle": "Premium Minimalists"
+      "angle": "Premium Minimalists",
+      "lander": "Premium Minimalists"
     },
     "260410 DOCTORS_Doctor lander_ALT* [INT_17/4]": {
-      "angle": "Doctors"
+      "angle": "Doctors",
+      "lander": "Doctors"
     },
     "260410 LAWYERS_Lawyer lander_ALT* (MOVED TO #2 15 PERSONA)": {
-      "angle": "Lawyers"
+      "angle": "Lawyers",
+      "lander": "Lawyers"
     },
     "260414 LAWYERS_Lawyer lander_ALT* [INT_17/4]": {
-      "angle": "Lawyers"
+      "angle": "Lawyers",
+      "lander": "Lawyers"
     },
     "260416 ANGLE 8: Aging After 30_ PDP(Longevity) lander_ALT* [INT_16/4]": {
-      "angle": "Aging after 30"
+      "angle": "Aging after 30",
+      "lander": "Longevity PDP"
     },
     "260417 (Potentials only) Aging After 30_ Just turned 40 lander_ALT* [INT_17/4]": {
-      "angle": "Aging after 30"
+      "angle": "Aging after 30",
+      "lander": "Aging after 40"
     },
     "260417_FINANCE BROS_Finance lander_ALT*  [INT_17/4]": {
-      "angle": "Finance Bros"
+      "angle": "Finance Bros",
+      "lander": "Finance Bros"
     },
     "260417_DIVORCED GUY_Rebuild lander_ALT*": {
-      "angle": "Divorced Dads"
+      "angle": "Divorced Dads",
+      "lander": "Divorced Guys"
     },
     "260417_FOUNDER ENTREPRENEURS_Founder lander_ALT*  [INT_17/4]": {
-      "angle": "Founder / Entrepreneur"
+      "angle": "Founder / Entrepreneur",
+      "lander": "Founder / Entrepreneurs"
     },
     "260410 WELLNESS CONVERTERS_Begin lander_ALT* (MOVED TO #2 15 PERSONA)": {
-      "angle": "Wellness Converters"
+      "angle": "Wellness Converters",
+      "lander": "Wellness Enthusiasts"
     },
     "260414 WELLNESS CONVERTERS_Begin lander_ALT* [INT_17/4]": {
-      "angle": "Wellness Converters"
+      "angle": "Wellness Converters",
+      "lander": "Wellness Enthusiasts"
     },
     "260417_WELLNESS WARRIOR DAD_Warrior dad lander_ALT*  [INT_17/4]": {
-      "angle": "Weekend Warrior Dads"
+      "angle": "Weekend Warrior Dads",
+      "lander": "Weekend Dads"
     }
   },
   "notes": {
@@ -862,7 +882,29 @@
     "Beauty": "Persona",
     "Health Conditions": "Persona",
     "MIXED": "Mixed",
-    "Main-PDP": "Main PDP"
+    "Main-PDP": "Main PDP",
+    "Joint Health": "Persona",
+    "Giannis": "Ambassador",
+    "Aging after 40": "X Reasons",
+    "Busy Mom": "Persona",
+    "Lawyers": "X Reasons",
+    "Aspirational Athletes": "Persona",
+    "Midlife Recalibrators": "X Reasons",
+    "Supplement Skeptics": "Persona",
+    "Wellness Enthusiasts": "X Reasons",
+    "High Performers": "Persona",
+    "Premium Minimalists": "X Reasons",
+    "Competitive Amateurs": "X Reasons",
+    "Doctors": "X Reasons",
+    "Finance Bros": "X Reasons",
+    "Health Lander": "Persona",
+    "New Dads": "X Reasons",
+    "Longevity PDP": "Main PDP",
+    "Founder / Entrepreneurs": "X Reasons",
+    "Fashion Concious Man": "X Reasons",
+    "Luxury Consumers": "X Reasons",
+    "Weekend Dads": "X Reasons",
+    "Divorced Guys": "X Reasons"
   },
   "snapshotViews": [
     {
