@@ -736,6 +736,9 @@ function Dashboard(){
   const[scaleRoasUpper,setScaleRoasUpper]=useState(()=>LS.get('scale_roas_upper',1.2));
   const[scaleRoasLower,setScaleRoasLower]=useState(()=>LS.get('scale_roas_lower',0.6));
   const[campMgmtCopyStatus,setCampMgmtCopyStatus]=useState('');
+  // Campaign Mgmt drilldown popups
+  const[cmAdsetDrill,setCmAdsetDrill]=useState(null);     // campaign name → show its adsets
+  const[cmBadgeDrill,setCmBadgeDrill]=useState(null);     // {campaign,type,label} → show ads behind a badge
   // Inefficiencies tab state
   const[ineffCampLimit,setIneffCampLimit]=useState(30);
   const[ineffAdsetLimit,setIneffAdsetLimit]=useState(30);
@@ -1815,6 +1818,48 @@ function Dashboard(){
     }
     return result;
   },[campMgmtList,adsetRaw,ov,notes,ineffCamps,goldMineAds,volumeAds,budgetTankers,ineffAdsets,ineffAds]);
+
+  // Campaign Mgmt: adset drill-down (Today vs Yesterday + L7D, like campaign cards)
+  const cmAdsetDrillData=useMemo(()=>{
+    if(!cmAdsetDrill||campMgmtCampsMeta===null||ineffAdsetRaw.length===0)return [];
+    const camp=campMgmtCampsMeta.find(c=>c.name===cmAdsetDrill);
+    if(!camp)return [];
+    // Map adset name → metadata (daily_budget, status) for adsets in this campaign
+    const adsetMetaByName={};
+    for(const a of (campMgmtAdsetsMeta||[])){
+      if(a.campaign_id===camp.id){
+        const b=parseInt(a.daily_budget||'0',10);
+        adsetMetaByName[a.name]={budget:Number.isFinite(b)?b/100:0,status:a.status||a.effective_status||''};
+      }
+    }
+    const matching=ineffAdsetRaw.filter(r=>r.campaign===cmAdsetDrill);
+    const g={};
+    for(const r of matching){const k=r.name;if(!g[k])g[k]=[];g[k].push(r);}
+    const sumRange=(rows,from,to)=>{let s=0,p=0,rev=0;for(const x of rows){if(x.day>=from&&x.day<=to){s+=x.spend;p+=x.purch;rev+=x.rev;}}return{s,p,roas:s>0?rev/s:0,cpp:p>0?s/p:null};};
+    const dayBefore=(()=>{const d=new Date(curTo+'T12:00:00');d.setDate(d.getDate()-1);return fmt(d);})();
+    return Object.entries(g).map(([n,rows])=>{
+      const meta=adsetMetaByName[n]||{budget:0,status:''};
+      return{
+        n, id:rows[0]?.id||'',
+        budget: meta.budget, status: meta.status,
+        d2: sumRange(rows,curTo,curTo),
+        d1: sumRange(rows,dayBefore,dayBefore),
+        p7: sumRange(rows,w7From,curTo),
+      };
+    }).filter(r=>r.d2.s>0||r.d1.s>0||r.p7.s>0).sort((a,b)=>b.d2.s-a.d2.s);
+  },[cmAdsetDrill,campMgmtCampsMeta,campMgmtAdsetsMeta,ineffAdsetRaw,curTo,w7From]);
+
+  // Campaign Mgmt: badge drill-down (ads behind a clicked badge)
+  const cmBadgeDrillData=useMemo(()=>{
+    if(!cmBadgeDrill)return[];
+    const {campaign,type}=cmBadgeDrill;
+    if(type==='goldmine') return goldMineAds.filter(a=>a.campaign===campaign);
+    if(type==='volume')   return volumeAds.filter(a=>a.campaign===campaign);
+    if(type==='tanker')   return budgetTankers.filter(a=>a.campaign===campaign);
+    if(type==='ineffadset')return ineffAdsets.filter(a=>a.campaign===campaign);
+    if(type==='ineffad')  return ineffAds.filter(a=>a.campaign===campaign);
+    return[];
+  },[cmBadgeDrill,goldMineAds,volumeAds,budgetTankers,ineffAdsets,ineffAds]);
 
   // Strategic recommendation from guardrails
   const recommendationFor=(roas,upper,lower)=>{
@@ -3276,7 +3321,10 @@ function Dashboard(){
           React.createElement('div',{className:'spinner',style:{width:32,height:32,margin:'0 auto 12px'}}),
           campMgmtLoading?'Loading active campaigns + adset budgets...':ineffMainLoading?'Loading campaign insights (14d)...':'Loading active statuses...'
         ),
-        campMgmtError&&React.createElement('div',{style:{color:'#f87171',fontSize:12,padding:12,background:'#260a0a',borderRadius:6,marginBottom:12}},'Error: '+campMgmtError),
+        // Suppress the error banner once snapshot data has populated campsMeta —
+        // the lazy-fetch still races Meta on load and can set this, but the snapshot
+        // is the real source of truth and the rendered data below is correct.
+        campMgmtError&&!campMgmtCampsMeta&&React.createElement('div',{style:{color:'#f87171',fontSize:12,padding:12,background:'#260a0a',borderRadius:6,marginBottom:12}},'Error: '+campMgmtError),
 
         // Overview block
         isReady&&React.createElement('div',{style:{marginBottom:20,padding:14,background:'#0c1220',border:'1px solid #1e293b',borderRadius:8}},
@@ -3312,10 +3360,13 @@ function Dashboard(){
           const badges=campMgmtInsights[c.name]||[];
           const rec=recommendationFor(c.d2.roas,scaleRoasUpper,scaleRoasLower);
           const recColor=rec.startsWith('Scale')?'#34d399':rec.startsWith('Drop')?'#f87171':rec.startsWith('Hold')?'#fbbf24':'#64748b';
-          return React.createElement('div',{key:c.id||c.name,style:{marginBottom:12,padding:14,background:'#0c1220',border:'1px solid #1e293b',borderRadius:8}},
+          const clickableBadgeTypes={goldmine:1,volume:1,tanker:1,ineffadset:1,ineffad:1};
+          return React.createElement('div',{key:c.id||c.name,onClick:()=>setCmAdsetDrill(c.name),title:'Click to view adsets',style:{marginBottom:12,padding:14,background:'#0c1220',border:'1px solid #1e293b',borderRadius:8,cursor:'pointer',transition:'border-color 0.15s,background 0.15s'},onMouseEnter:e=>{e.currentTarget.style.borderColor='#3b82f6';e.currentTarget.style.background='#0e1730';},onMouseLeave:e=>{e.currentTarget.style.borderColor='#1e293b';e.currentTarget.style.background='#0c1220';}},
             React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:8,flexWrap:'wrap'}},
               React.createElement('div',{style:{flex:1,minWidth:0}},
-                React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},(i+1)+'. '+c.name),
+                React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},(i+1)+'. '+c.name,
+                  React.createElement('span',{style:{fontSize:10,color:'#3b82f6',marginLeft:8,fontWeight:600}},'→ view adsets')
+                ),
                 React.createElement('div',{style:{fontSize:10,color:'#64748b',marginTop:2}},'Ad Account: '+(config?.accountName||'—'))
               )
             ),
@@ -3352,7 +3403,15 @@ function Dashboard(){
               )
             ),
             badges.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}},
-              badges.map((b,j)=>React.createElement('span',{key:j,style:{fontSize:10,fontWeight:600,color:b.color,background:'#0a1020',border:'1px solid '+b.color+'40',padding:'3px 8px',borderRadius:4}},b.label))
+              badges.map((b,j)=>{
+                const clickable=!!clickableBadgeTypes[b.type];
+                return React.createElement('span',{
+                  key:j,
+                  onClick:clickable?(e=>{e.stopPropagation();setCmBadgeDrill({campaign:c.name,type:b.type,label:b.label});}):undefined,
+                  title:clickable?'Click to view ads':undefined,
+                  style:{fontSize:10,fontWeight:600,color:b.color,background:'#0a1020',border:'1px solid '+b.color+'40',padding:'3px 8px',borderRadius:4,cursor:clickable?'pointer':'default',textDecoration:clickable?'underline':'none',textDecorationStyle:clickable?'dotted':'solid',textUnderlineOffset:'2px'}
+                },b.label);
+              })
             ),
             React.createElement('div',{style:{fontSize:12,fontWeight:700,color:recColor,borderTop:'1px solid #1e293b',paddingTop:8}},'\u2192 Strategic Recommendation: '+rec)
           );
@@ -3593,6 +3652,145 @@ function Dashboard(){
       ),
       React.createElement('div',{style:{padding:'10px 20px',fontSize:10,color:'#475569'}},'Changes save automatically. Use Publish to sync to GitHub.')
     ),
+
+    // Campaign Mgmt: adsets-for-campaign drill-down panel
+    cmAdsetDrill&&(()=>{
+      const fmtS=v=>v!=null?'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+      const fmtX=v=>v!=null?v.toFixed(2)+'x':'—';
+      const fmtN=v=>v!=null?Math.round(v).toLocaleString():'—';
+      const roasColor=r=>r==null?'#94a3b8':r>=1.0?'#34d399':r>=0.7?'#fb923c':'#f87171';
+      return React.createElement('div',{style:{position:'fixed',top:0,right:0,width:560,height:'100vh',background:'#0c1220',borderLeft:'2px solid #1e293b',zIndex:100,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'},className:'fade-in'},
+        React.createElement('div',{style:{padding:'16px 20px',borderBottom:'1px solid #1e293b',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:11,color:'#3b82f6',fontWeight:700,letterSpacing:'0.5px',marginBottom:4}},'CAMPAIGN → ADSETS'),
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},cmAdsetDrill),
+            React.createElement('div',{style:{fontSize:11,color:'#64748b',marginTop:4}},cmAdsetDrillData.length+' adset'+(cmAdsetDrillData.length!==1?'s':'')+' — Today vs Yesterday + L7D')
+          ),
+          React.createElement('button',{onClick:()=>setCmAdsetDrill(null),style:{background:'#1e293b',border:'none',color:'#94a3b8',borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0,marginLeft:12}},'Close')
+        ),
+        React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'12px 16px'}},
+          cmAdsetDrillData.length===0
+            ? React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12}},'No adsets with spend found for this campaign.')
+            : cmAdsetDrillData.map((a,i)=>React.createElement('div',{key:a.n,style:{marginBottom:10,padding:12,background:'#0a1020',border:'1px solid #1e293b',borderRadius:6}},
+                React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3,marginBottom:6}},(i+1)+'. '+a.n),
+                React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,...S.mono,fontSize:11}},
+                  React.createElement('div',null,
+                    React.createElement('span',{style:{color:'#64748b'}},'Daily Budget: '),
+                    React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},a.budget>0?fmtS(a.budget):'—')
+                  ),
+                  React.createElement('div',null,
+                    React.createElement('span',{style:{color:'#64748b'}},'Spend: '),
+                    React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtS(a.d2.s)),
+                    React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:10}},'('+fmtS(a.d1.s)+')')
+                  ),
+                  React.createElement('div',null,
+                    React.createElement('span',{style:{color:'#64748b'}},'ROAS: '),
+                    React.createElement('span',{style:{color:roasColor(a.d2.roas),fontWeight:600}},fmtX(a.d2.roas)),
+                    React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:10}},'('+fmtX(a.d1.roas)+')'),
+                    React.createElement('span',{style:{color:'#586880',marginLeft:6,fontSize:10}},'[L7D: '+fmtX(a.p7.roas)+']')
+                  ),
+                  React.createElement('div',null,
+                    React.createElement('span',{style:{color:'#64748b'}},'Purch: '),
+                    React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(a.d2.p)),
+                    React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:10}},'('+fmtN(a.d1.p)+')')
+                  ),
+                  React.createElement('div',null,
+                    React.createElement('span',{style:{color:'#64748b'}},'CPP: '),
+                    React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtS(a.d2.cpp)),
+                    React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:10}},'('+fmtS(a.d1.cpp)+')'),
+                    React.createElement('span',{style:{color:'#586880',marginLeft:6,fontSize:10}},'[L7D: '+fmtS(a.p7.cpp)+']')
+                  )
+                )
+              ))
+        )
+      );
+    })(),
+
+    // Campaign Mgmt: badge → ads drill-down panel
+    cmBadgeDrill&&(()=>{
+      const fmtS=v=>v!=null?'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+      const fmtSint=v=>v!=null?'$'+Math.round(v).toLocaleString():'—';
+      const fmtX=v=>v!=null?v.toFixed(2)+'x':'—';
+      const fmtN=v=>v!=null?Math.round(v).toLocaleString():'—';
+      const fmtPct=v=>v!=null?(v*100).toFixed(0)+'%':'—';
+      const roasColor=r=>r==null?'#94a3b8':r>=1.0?'#34d399':r>=0.7?'#fb923c':'#f87171';
+      const t=cmBadgeDrill.type;
+      const headerColor=t==='goldmine'?'#fbbf24':t==='volume'?'#3b82f6':t==='tanker'?'#fbbf24':'#fb923c';
+      // Render rows differently per badge type so we mirror the source tab's columns
+      const rows=cmBadgeDrillData;
+      const renderRow=(a,i)=>{
+        if(t==='goldmine'||t==='volume'){
+          // adD shape: d2/d1/w7 with s,p,roas,cpa
+          return React.createElement('div',{key:a.n||i,style:{marginBottom:10,padding:12,background:'#0a1020',border:'1px solid #1e293b',borderRadius:6}},
+            React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3,marginBottom:2}},(i+1)+'. '+a.n),
+            React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:6}},'Adset: '+(a.adset||'—')),
+            React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,...S.mono,fontSize:11}},
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'Spend (cur): '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.d2?.s))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'ROAS (cur): '),React.createElement('span',{style:{color:roasColor(a.d2?.roas),fontWeight:600}},fmtX(a.d2?.roas))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'Purch (cur): '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(a.d2?.p))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'CPA (cur): '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.d2?.cpa))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'L7D ROAS: '),React.createElement('span',{style:{color:roasColor(a.w7?.roas),fontWeight:600}},fmtX(a.w7?.roas))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'L7D Purch: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(a.w7?.p)))
+            )
+          );
+        }
+        if(t==='tanker'){
+          return React.createElement('div',{key:a.n||i,style:{marginBottom:10,padding:12,background:'#0a1020',border:'1px solid #1e293b',borderRadius:6}},
+            React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3,marginBottom:2}},(i+1)+'. '+a.n),
+            React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:6}},'Adset: '+(a.adset||'—')),
+            React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,...S.mono,fontSize:11}},
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'Spend: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.d2?.s)),React.createElement('span',{style:{color:'#64748b',marginLeft:4,fontSize:10}},'('+fmtSint(a.d1?.s)+')')),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'% of Adset: '),React.createElement('span',{style:{color:'#fbbf24',fontWeight:600}},fmtPct(a.ratio))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'ROAS: '),React.createElement('span',{style:{color:roasColor(a.d2?.roas),fontWeight:600}},fmtX(a.d2?.roas))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'Purch: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(a.d2?.p))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p3d ROAS: '),React.createElement('span',{style:{color:roasColor(a.p3?.roas),fontWeight:600}},fmtX(a.p3?.roas))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'Adset Spend: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.adsetD2)))
+            )
+          );
+        }
+        if(t==='ineffadset'){
+          return React.createElement('div',{key:a.n||i,style:{marginBottom:10,padding:12,background:'#0a1020',border:'1px solid #1e293b',borderRadius:6}},
+            React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3,marginBottom:6}},(i+1)+'. '+a.n),
+            React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,...S.mono,fontSize:11}},
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d Spend: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.p7?.s))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d ROAS: '),React.createElement('span',{style:{color:roasColor(a.p7?.roas),fontWeight:600}},fmtX(a.p7?.roas))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d Purch: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(a.p7?.p))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p14d Spend: '),React.createElement('span',{style:{color:'#94a3b8',fontWeight:600}},fmtSint(a.p14?.s))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p14d ROAS: '),React.createElement('span',{style:{color:roasColor(a.p14?.roas),fontWeight:600}},fmtX(a.p14?.roas))),
+              React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d CPA: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.p7?.cpa)))
+            )
+          );
+        }
+        // ineffad
+        return React.createElement('div',{key:a.n||i,style:{marginBottom:10,padding:12,background:'#0a1020',border:'1px solid #1e293b',borderRadius:6}},
+          React.createElement('div',{style:{fontSize:12,fontWeight:600,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3,marginBottom:2}},(i+1)+'. '+a.n),
+          React.createElement('div',{style:{fontSize:10,color:'#64748b',marginBottom:6}},'Adset: '+(a.adset||'—')),
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,...S.mono,fontSize:11}},
+            React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d Spend: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.p7?.s))),
+            React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d ROAS: '),React.createElement('span',{style:{color:roasColor(a.p7?.roas),fontWeight:600}},fmtX(a.p7?.roas))),
+            React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d Purch: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtN(a.p7?.p))),
+            React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p14d Spend: '),React.createElement('span',{style:{color:'#94a3b8',fontWeight:600}},fmtSint(a.p14?.s))),
+            React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p14d ROAS: '),React.createElement('span',{style:{color:roasColor(a.p14?.roas),fontWeight:600}},fmtX(a.p14?.roas))),
+            React.createElement('div',null,React.createElement('span',{style:{color:'#64748b'}},'p7d CPA: '),React.createElement('span',{style:{color:'#e2e8f0',fontWeight:600}},fmtSint(a.p7?.cpa)))
+          )
+        );
+      };
+      return React.createElement('div',{style:{position:'fixed',top:0,right:0,width:560,height:'100vh',background:'#0c1220',borderLeft:'2px solid #1e293b',zIndex:101,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'},className:'fade-in'},
+        React.createElement('div',{style:{padding:'16px 20px',borderBottom:'1px solid #1e293b',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:11,color:headerColor,fontWeight:700,letterSpacing:'0.5px',marginBottom:4}},cmBadgeDrill.label),
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color:'#e2e8f0',wordBreak:'break-word',lineHeight:1.3}},cmBadgeDrill.campaign),
+            React.createElement('div',{style:{fontSize:11,color:'#64748b',marginTop:4}},rows.length+' '+(t==='ineffadset'?'adset':'ad')+(rows.length!==1?'s':''))
+          ),
+          React.createElement('button',{onClick:()=>setCmBadgeDrill(null),style:{background:'#1e293b',border:'none',color:'#94a3b8',borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0,marginLeft:12}},'Close')
+        ),
+        React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'12px 16px'}},
+          rows.length===0
+            ? React.createElement('div',{style:{padding:20,color:'#64748b',fontSize:12}},'No matching entities found.')
+            : rows.map((a,i)=>renderRow(a,i))
+        )
+      );
+    })(),
 
     // Campaign drill-down panel
     campDrill&&React.createElement('div',{style:{position:'fixed',top:0,right:0,width:520,height:'100vh',background:'#0c1220',borderLeft:'2px solid #1e293b',zIndex:100,display:'flex',flexDirection:'column',boxShadow:'-8px 0 32px rgba(0,0,0,0.5)'},className:'fade-in'},
